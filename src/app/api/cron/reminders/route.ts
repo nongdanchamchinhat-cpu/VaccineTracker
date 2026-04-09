@@ -20,6 +20,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    if (!process.env.RESEND_API_KEY || !process.env.REMINDER_FROM_EMAIL) {
+      logInfo("Cron reminders skipped because email provider is not configured");
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "email_provider_not_configured",
+      });
+    }
+
     const admin = createAdminSupabaseClient();
     const now = DateTime.utc();
     const windowStart = now.minus({ minutes: 15 });

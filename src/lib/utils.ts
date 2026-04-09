@@ -64,3 +64,49 @@ export function computeProgress(
 export function formatReminderLabel(reminderKey: string) {
   return reminderKey === "before_1_day" ? "trước 1 ngày" : "trước 2 giờ";
 }
+
+export function buildGoogleCalendarUrl({
+  childName,
+  timezone,
+  item,
+}: {
+  childName: string;
+  timezone: string;
+  item: {
+    id: string;
+    scheduled_date: string;
+    appointment_time_local: string;
+    vaccine_name: string;
+    milestone: string;
+    disease: string;
+    origin: string;
+    estimated_price: number | null;
+  };
+}) {
+  const start = buildAppointmentDateTime(
+    item.scheduled_date,
+    item.appointment_time_local,
+    timezone,
+  );
+  const end = start.plus({ hours: 1 });
+  const details = [
+    `Moc: ${item.milestone}`,
+    `Benh phong ngua: ${item.disease}`,
+    `Xuat xu: ${item.origin}`,
+    `Chi phi du kien: ${item.estimated_price ?? 0} VND`,
+    "Lich nay chi mang tinh tham khao, can bac si xac nhan truoc khi tiem.",
+  ].join("\n");
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `Tiem chung cho ${childName}: ${item.vaccine_name}`,
+    dates: `${start.toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'")}/${end.toUTC().toFormat(
+      "yyyyLLdd'T'HHmmss'Z'",
+    )}`,
+    details,
+    location: "VNVC / Long Chau / Co so tiem chung cua ban",
+    ctz: timezone,
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export function AuthFlow() {
@@ -58,6 +59,7 @@ export function AuthFlow() {
       }
 
       setStatus(payload.message ?? "Đăng nhập thành công.");
+      router.push("/");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mã xác thực không hợp lệ.");
@@ -77,8 +79,8 @@ export function AuthFlow() {
             Sổ tay tiêm chủng production-ready cho phụ huynh Việt Nam.
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-slate-300">
-            Theo dõi nhiều hồ sơ bé, dùng lịch mẫu Việt Nam, tự chỉnh mũi theo thực tế
-            và nhận email nhắc lịch thật thay vì phụ thuộc trình duyệt.
+            Đăng nhập chỉ dành cho người muốn đồng bộ lịch tiêm chủng lên database.
+            Nếu không đăng nhập, bạn vẫn có thể dùng app ở chế độ local storage ngay từ trang chủ.
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
@@ -105,9 +107,16 @@ export function AuthFlow() {
             Bắt đầu bằng email của bạn
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Chúng tôi sẽ gửi OTP qua Supabase Auth. Sau khi vào app, bạn có thể tạo hồ
-            sơ cho bé và khởi tạo lịch mẫu Việt Nam ngay.
+            OTP là tuỳ chọn để đồng bộ dữ liệu server-side. Nếu chỉ muốn dùng nhanh trên
+            thiết bị hiện tại, quay lại trang chủ và dùng guest mode.
           </p>
+
+          <Link
+            href="/"
+            className="mt-4 inline-flex rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            Quay lại chế độ không đăng nhập
+          </Link>
 
           {step === "request" ? (
             <form className="mt-8 space-y-4" onSubmit={handleRequestOtp}>

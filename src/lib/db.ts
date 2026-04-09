@@ -55,6 +55,9 @@ export async function loadDashboardData(
   if (!selectedChild) {
     return {
       userEmail: user.email,
+      emailReminderConfigured: Boolean(
+        process.env.RESEND_API_KEY && process.env.REMINDER_FROM_EMAIL,
+      ),
       children: typedChildren,
       selectedChild: null,
       scheduleItems: [],
@@ -87,6 +90,9 @@ export async function loadDashboardData(
 
   return {
     userEmail: user.email,
+    emailReminderConfigured: Boolean(
+      process.env.RESEND_API_KEY && process.env.REMINDER_FROM_EMAIL,
+    ),
     children: typedChildren,
     selectedChild,
     scheduleItems: (scheduleItems ?? []) as ScheduleItem[],

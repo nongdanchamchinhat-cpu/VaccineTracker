@@ -89,6 +89,7 @@ export interface NotificationDelivery {
 
 export interface DashboardBootstrapData {
   userEmail: string;
+  emailReminderConfigured: boolean;
   children: ChildProfile[];
   selectedChild: ChildProfile | null;
   scheduleItems: ScheduleItem[];

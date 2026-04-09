@@ -9,3 +9,5 @@ dist
 .DS_Store
 tsconfig.tsbuildinfo
 Test Case/runtime/
+.vercel
+.env*.local

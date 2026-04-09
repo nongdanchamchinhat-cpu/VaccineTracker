@@ -6,7 +6,8 @@ Kobe Tracker đã được nâng từ prototype HTML sang một ứng dụng Nex
 
 - Next.js App Router + TypeScript + Tailwind
 - Supabase Auth (OTP email) + Postgres
-- Resend cho email reminder
+- Calendar reminder miễn phí qua `.ics`
+- Resend cho email reminder server-side khi cần public rộng
 - Vercel Cron cho job quét reminder mỗi 15 phút
 - Sentry cho runtime/error monitoring
 
@@ -18,9 +19,10 @@ Kobe Tracker đã được nâng từ prototype HTML sang một ứng dụng Nex
 - Timeline lịch tiêm với filter `Tất cả / Cần tiêm / Đã tiêm`
 - Mark complete, skip, cập nhật chi phí thực tế
 - Thêm mũi custom ngoài lịch mẫu
-- Lưu cài đặt email reminder theo từng hồ sơ bé
-- Export file `.ics` theo từng bé
-- Cron gửi email reminder thật qua Resend
+- Export file `.ics` theo từng bé với nhắc `trước 1 ngày` và `trước 2 giờ`
+- Link thêm nhanh từng mũi vào Google Calendar
+- Lưu cài đặt reminder theo từng hồ sơ bé
+- Cron gửi email reminder thật qua Resend khi đã cấu hình provider
 - Delivery log chống gửi trùng
 
 ## Thiết lập môi trường
@@ -30,12 +32,13 @@ Kobe Tracker đã được nâng từ prototype HTML sang một ứng dụng Nex
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `RESEND_API_KEY`
-   - `REMINDER_FROM_EMAIL`
    - `CRON_SECRET`
    - `NEXT_PUBLIC_APP_URL`
-3. Chạy migration SQL trong [supabase/migrations/0001_init.sql](/Users/alvin/Desktop/App tiêm chủng/supabase/migrations/0001_init.sql).
-4. Cấu hình Supabase email template để gửi OTP.
+3. Nếu muốn dùng email reminder server-side thì điền thêm:
+   - `RESEND_API_KEY`
+   - `REMINDER_FROM_EMAIL`
+4. Chạy migration SQL trong [supabase/migrations/0001_init.sql](/Users/alvin/Desktop/App tiêm chủng/supabase/migrations/0001_init.sql).
+5. Cấu hình Supabase email template để gửi OTP.
 
 ## Chạy local
 
@@ -63,5 +66,7 @@ env PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin npm run 
 
 - `vercel.json` đã cấu hình cron 15 phút cho `/api/cron/reminders`.
 - Route cron kiểm tra header `Authorization: Bearer $CRON_SECRET`.
+- Nếu chưa có `RESEND_API_KEY` và `REMINDER_FROM_EMAIL`, cron sẽ tự bỏ qua email reminder thay vì fail runtime.
+- Calendar export là đường nhắc lịch miễn phí mặc định của v1.
 - Email reminder gộp theo bé và theo cửa sổ nhắc `before_1_day` / `before_2_hours`.
 - App chỉ hỗ trợ thị trường Việt Nam trong v1 và có disclaimer rõ ràng trong UI.

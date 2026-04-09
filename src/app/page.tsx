@@ -1,5 +1,5 @@
-import { AuthFlow } from "@/components/auth-flow";
 import { DashboardApp } from "@/components/dashboard-app";
+import { GuestDashboardApp } from "@/components/guest-dashboard-app";
 import { loadDashboardData } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export default async function HomePage({
   const bootstrap = await loadDashboardData(params.childId);
 
   if (!bootstrap) {
-    return <AuthFlow />;
+    return <GuestDashboardApp />;
   }
 
   return <DashboardApp bootstrap={bootstrap} />;

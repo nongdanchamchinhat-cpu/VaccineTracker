@@ -1,11 +1,17 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
+  createGuestChild,
+  createGuestReminderPreference,
+  createGuestScheduleFromTemplates,
+  loadGuestStorage,
+  saveGuestStorage,
+} from "@/lib/guest-local";
+import { generateCalendarICS } from "@/lib/ics";
+import {
   ChildProfile,
-  DashboardBootstrapData,
   ReminderPreferences,
   ScheduleItem,
   ScheduleItemStatus,
@@ -18,50 +24,46 @@ import {
   formatDateLabel,
   formatDateTimeLabel,
 } from "@/lib/utils";
-import { DEFAULT_TIMEZONE } from "@/lib/constants";
+import { DEFAULT_APPOINTMENT_TIME, DEFAULT_TIMEZONE } from "@/lib/constants";
 
 type FilterTab = "all" | "todo" | "done";
 
 function getDefaultReminderPreferences(
   selectedChild: ChildProfile | null,
   existing: ReminderPreferences | null,
-  fallbackEmail: string,
-): ReminderPreferences {
+) {
   if (existing) return existing;
 
   return {
     id: "",
     child_id: selectedChild?.id ?? "",
-    reminder_email: fallbackEmail,
+    reminder_email: "",
     channel: "email",
-    email_enabled: true,
+    email_enabled: false,
     remind_one_day: true,
     remind_two_hours: true,
     timezone: selectedChild?.timezone ?? DEFAULT_TIMEZONE,
     created_at: "",
     updated_at: "",
-  };
+  } satisfies ReminderPreferences;
 }
 
-export function DashboardApp({
-  bootstrap,
-}: {
-  bootstrap: DashboardBootstrapData;
-}) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+export function GuestDashboardApp() {
+  const [ready, setReady] = useState(false);
+  const [children, setChildren] = useState<ChildProfile[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [allScheduleItems, setAllScheduleItems] = useState<ScheduleItem[]>([]);
+  const [reminderPreferencesByChild, setReminderPreferencesByChild] = useState<
+    Record<string, ReminderPreferences>
+  >({});
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
   const [toast, setToast] = useState<string | null>(null);
   const [customFormOpen, setCustomFormOpen] = useState(false);
-  const [addChildOpen, setAddChildOpen] = useState(bootstrap.children.length === 0);
+  const [addChildOpen, setAddChildOpen] = useState(true);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [reminderForm, setReminderForm] = useState(() =>
-    getDefaultReminderPreferences(
-      bootstrap.selectedChild,
-      bootstrap.reminderPreferences,
-      bootstrap.userEmail,
-    ),
+  const [reminderForm, setReminderForm] = useState<ReminderPreferences>(
+    getDefaultReminderPreferences(null, null),
   );
   const [childForm, setChildForm] = useState({
     name: "",
@@ -79,18 +81,42 @@ export function DashboardApp({
     notes: "",
   });
 
-  const selectedChild = bootstrap.selectedChild;
-  const scheduleItems = bootstrap.scheduleItems;
+  useEffect(() => {
+    const storage = loadGuestStorage();
+    setChildren(storage.children);
+    setSelectedChildId(storage.selectedChildId);
+    setAllScheduleItems(storage.scheduleItems);
+    setReminderPreferencesByChild(storage.reminderPreferencesByChild);
+    setAddChildOpen(storage.children.length === 0);
+    setReady(true);
+  }, []);
 
   useEffect(() => {
-    setReminderForm(
-      getDefaultReminderPreferences(
-        bootstrap.selectedChild,
-        bootstrap.reminderPreferences,
-        bootstrap.userEmail,
-      ),
-    );
-  }, [bootstrap.reminderPreferences, bootstrap.selectedChild, bootstrap.userEmail]);
+    if (!ready) return;
+    saveGuestStorage({
+      children,
+      selectedChildId,
+      scheduleItems: allScheduleItems,
+      reminderPreferencesByChild,
+    });
+  }, [allScheduleItems, children, ready, reminderPreferencesByChild, selectedChildId]);
+
+  const selectedChild =
+    children.find((child) => child.id === selectedChildId) ?? children[0] ?? null;
+  const scheduleItems = useMemo(
+    () =>
+      selectedChild
+        ? allScheduleItems.filter((item) => item.child_id === selectedChild.id)
+        : [],
+    [allScheduleItems, selectedChild],
+  );
+  const reminderPreferences = selectedChild
+    ? reminderPreferencesByChild[selectedChild.id] ?? null
+    : null;
+
+  useEffect(() => {
+    setReminderForm(getDefaultReminderPreferences(selectedChild, reminderPreferences));
+  }, [reminderPreferences, selectedChild]);
 
   const filteredItems = useMemo(() => {
     return scheduleItems.filter((item) => {
@@ -117,114 +143,32 @@ export function DashboardApp({
     0,
   );
   const progress = computeProgress(scheduleItems.length, completedItems.length);
+  const topCalendarCandidates = plannedItems.slice(0, 3);
 
   function notify(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(null), 3500);
   }
 
-  async function signOut() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.refresh();
-  }
-
-  async function createChild(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!childForm.name || !childForm.birthDate) return;
-
-    const createResponse = await fetch("/api/children", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: childForm.name,
-        birth_date: childForm.birthDate,
-        gender: childForm.gender || null,
-      }),
-    });
-
-    const createPayload = (await createResponse.json()) as { error?: string; child?: ChildProfile };
-    if (!createResponse.ok || !createPayload.child) {
-      notify(createPayload.error ?? "Không thể tạo hồ sơ bé.");
-      return;
-    }
-
-    const scheduleResponse = await fetch(
-      `/api/children/${createPayload.child.id}/schedule/from-template`,
-      {
-        method: "POST",
-      },
-    );
-
-    const schedulePayload = (await scheduleResponse.json()) as { error?: string };
-    if (!scheduleResponse.ok) {
-      notify(schedulePayload.error ?? "Không thể khởi tạo lịch mẫu.");
-      return;
-    }
-
-    setChildForm({ name: "", birthDate: "", gender: "" });
-    setAddChildOpen(false);
-    notify("Đã tạo hồ sơ bé và khởi tạo lịch mẫu.");
-    startTransition(() => {
-      router.push(`/?childId=${createPayload.child?.id}`);
-      router.refresh();
-    });
-  }
-
-  async function saveReminderPreferences(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function downloadCalendar() {
     if (!selectedChild) return;
 
-    const response = await fetch("/api/me/reminder-preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        childId: selectedChild.id,
-        reminder_email: reminderForm.reminder_email,
-        email_enabled: reminderForm.email_enabled,
-        remind_one_day: reminderForm.remind_one_day,
-        remind_two_hours: reminderForm.remind_two_hours,
-        timezone: reminderForm.timezone || selectedChild.timezone,
-      }),
+    const ics = generateCalendarICS({
+      childName: selectedChild.name,
+      timezone: selectedChild.timezone,
+      items: scheduleItems,
     });
 
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      notify(payload.error ?? "Không thể lưu cài đặt nhắc lịch.");
-      return;
-    }
-
-    notify("Đã cập nhật cài đặt nhắc lịch.");
-    startTransition(() => router.refresh());
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${selectedChild.name}-schedule.ics`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
-  async function createCustomItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedChild) return;
-
-    const response = await fetch("/api/schedule-items", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        child_id: selectedChild.id,
-        vaccine_name: customForm.vaccine_name,
-        disease: customForm.disease,
-        origin: customForm.origin,
-        estimated_price: customForm.estimated_price
-          ? Number(customForm.estimated_price)
-          : null,
-        scheduled_date: customForm.scheduled_date,
-        milestone: customForm.milestone,
-        recommended_age_label: customForm.recommended_age_label,
-        notes: customForm.notes || null,
-      }),
-    });
-
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      notify(payload.error ?? "Không thể thêm mũi tuỳ chỉnh.");
-      return;
-    }
-
+  function resetCustomForm() {
     setCustomForm({
       vaccine_name: "",
       disease: "",
@@ -235,67 +179,134 @@ export function DashboardApp({
       recommended_age_label: "Tuỳ chỉnh",
       notes: "",
     });
+  }
+
+  function createChildHandler(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!childForm.name || !childForm.birthDate) return;
+
+    const child = createGuestChild({
+      name: childForm.name,
+      birthDate: childForm.birthDate,
+      gender: childForm.gender || null,
+    });
+    const nextItems = createGuestScheduleFromTemplates(child);
+    const nextPreference = createGuestReminderPreference(child);
+
+    setChildren((current) => [...current, child]);
+    setSelectedChildId(child.id);
+    setAllScheduleItems((current) => [...current, ...nextItems]);
+    setReminderPreferencesByChild((current) => ({
+      ...current,
+      [child.id]: nextPreference,
+    }));
+    setChildForm({ name: "", birthDate: "", gender: "" });
+    setAddChildOpen(false);
+    notify("Đã tạo hồ sơ bé và lưu vào local storage.");
+  }
+
+  function saveReminderPreferences(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedChild) return;
+
+    const nextPreference: ReminderPreferences = {
+      ...(reminderPreferencesByChild[selectedChild.id] ??
+        createGuestReminderPreference(selectedChild)),
+      reminder_email: reminderForm.reminder_email,
+      email_enabled: reminderForm.email_enabled,
+      remind_one_day: reminderForm.remind_one_day,
+      remind_two_hours: reminderForm.remind_two_hours,
+      timezone: reminderForm.timezone || selectedChild.timezone,
+      updated_at: new Date().toISOString(),
+    };
+
+    setReminderPreferencesByChild((current) => ({
+      ...current,
+      [selectedChild.id]: nextPreference,
+    }));
+    notify("Đã lưu cài đặt reminder trong local storage.");
+  }
+
+  function createCustomItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedChild) return;
+
+    const now = new Date().toISOString();
+    const item: ScheduleItem = {
+      id: crypto.randomUUID(),
+      child_id: selectedChild.id,
+      template_entry_id: null,
+      sort_order: 9000,
+      scheduled_date: customForm.scheduled_date,
+      appointment_time_local: DEFAULT_APPOINTMENT_TIME,
+      recommended_age_days: null,
+      recommended_age_label: customForm.recommended_age_label,
+      milestone: customForm.milestone,
+      vaccine_name: customForm.vaccine_name,
+      origin: customForm.origin,
+      disease: customForm.disease,
+      estimated_price: customForm.estimated_price ? Number(customForm.estimated_price) : null,
+      actual_price: null,
+      notes: customForm.notes || null,
+      status: "planned",
+      template_source: "custom",
+      completed_at: null,
+      created_at: now,
+      updated_at: now,
+    };
+
+    setAllScheduleItems((current) => [...current, item]);
+    resetCustomForm();
     setCustomFormOpen(false);
-    notify("Đã thêm mũi tuỳ chỉnh.");
-    startTransition(() => router.refresh());
+    notify("Đã thêm mũi tuỳ chỉnh vào local storage.");
   }
 
-  async function quickComplete(item: ScheduleItem) {
-    const response = await fetch(`/api/schedule-items/${item.id}/complete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        actual_price: item.actual_price ?? item.estimated_price ?? null,
-      }),
-    });
-
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      notify(payload.error ?? "Không thể cập nhật trạng thái mũi.");
-      return;
-    }
-
+  function quickComplete(item: ScheduleItem) {
+    setAllScheduleItems((current) =>
+      current.map((entry) =>
+        entry.id === item.id
+          ? {
+              ...entry,
+              status: "completed",
+              actual_price: entry.actual_price ?? entry.estimated_price ?? null,
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }
+          : entry,
+      ),
+    );
     notify(`Đã đánh dấu "${item.vaccine_name}" là đã tiêm.`);
-    startTransition(() => router.refresh());
   }
 
-  async function updateItem(
-    itemId: string,
-    nextStatus: ScheduleItemStatus,
-    formData: FormData,
-  ) {
-    const response = await fetch(`/api/schedule-items/${itemId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: nextStatus,
-        scheduled_date: String(formData.get("scheduled_date") || ""),
-        estimated_price: formData.get("estimated_price")
-          ? Number(formData.get("estimated_price"))
-          : null,
-        actual_price: formData.get("actual_price")
-          ? Number(formData.get("actual_price"))
-          : null,
-        vaccine_name: String(formData.get("vaccine_name") || ""),
-        disease: String(formData.get("disease") || ""),
-        origin: String(formData.get("origin") || ""),
-        notes: String(formData.get("notes") || "") || null,
-      }),
-    });
-
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      notify(payload.error ?? "Không thể cập nhật mũi tiêm.");
-      return;
-    }
-
+  function updateItem(itemId: string, nextStatus: ScheduleItemStatus, formData: FormData) {
+    setAllScheduleItems((current) =>
+      current.map((entry) =>
+        entry.id === itemId
+          ? {
+              ...entry,
+              status: nextStatus,
+              scheduled_date: String(formData.get("scheduled_date") || ""),
+              estimated_price: formData.get("estimated_price")
+                ? Number(formData.get("estimated_price"))
+                : null,
+              actual_price: formData.get("actual_price")
+                ? Number(formData.get("actual_price"))
+                : null,
+              vaccine_name: String(formData.get("vaccine_name") || ""),
+              disease: String(formData.get("disease") || ""),
+              origin: String(formData.get("origin") || ""),
+              notes: String(formData.get("notes") || "") || null,
+              completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
+              updated_at: new Date().toISOString(),
+            }
+          : entry,
+      ),
+    );
     setEditingItemId(null);
-    notify("Đã lưu thay đổi.");
-    startTransition(() => router.refresh());
+    notify("Đã lưu thay đổi trong local storage.");
   }
 
-  const reminderEmailValue = reminderForm.reminder_email ?? bootstrap.userEmail;
-  const topCalendarCandidates = plannedItems.slice(0, 3);
+  if (!ready) return null;
 
   return (
     <div className="min-h-screen px-4 py-6 md:px-8">
@@ -304,31 +315,31 @@ export function DashboardApp({
           <div className="grid gap-6 px-6 py-8 md:grid-cols-[1.4fr_0.9fr] md:px-8">
             <div>
               <div className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-teal-100">
-                Multi-user vaccine tracker
+                Guest mode
               </div>
               <h1 className="mt-6 text-3xl font-black leading-tight md:text-5xl">
-                Quản lý lịch tiêm cho cả gia đình, không còn phụ thuộc `localStorage`.
+                Dùng ngay không cần đăng nhập. Dữ liệu sẽ lưu trong local storage.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                Mỗi tài khoản có thể quản lý nhiều bé, tạo lịch từ mẫu Việt Nam, chỉnh tay
-                từng mũi và nhắc lịch miễn phí qua Calendar trước khi bật email server-side.
+                Phù hợp khi phụ huynh muốn tạo lịch nhanh, quản lý nhiều bé trên cùng thiết bị và
+                dùng Calendar để nhắc lịch. Đăng nhập chỉ cần khi muốn đồng bộ lên database.
               </p>
             </div>
 
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-300">
-                Tài khoản
+                Chế độ hiện tại
               </p>
-              <div className="mt-3 text-lg font-bold">{bootstrap.userEmail}</div>
+              <div className="mt-3 text-lg font-bold">Khách / local storage</div>
               <p className="mt-2 text-sm text-slate-300">
-                Đăng nhập bằng OTP email qua Supabase Auth.
+                Không bắt buộc OTP. Dữ liệu chỉ lưu trên trình duyệt và thiết bị đang dùng.
               </p>
-              <button
-                onClick={signOut}
-                className="mt-6 rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+              <a
+                href="/login"
+                className="mt-6 inline-flex rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
-                Đăng xuất
-              </button>
+                Đăng nhập để đồng bộ server
+              </a>
             </div>
           </div>
         </header>
@@ -347,20 +358,15 @@ export function DashboardApp({
                   <p className="mt-1 text-sm text-slate-500">
                     {selectedChild
                       ? `Sinh ngày ${formatDateLabel(selectedChild.birth_date)} · múi giờ ${selectedChild.timezone}`
-                      : "Tạo bé đầu tiên để hệ thống sinh lịch tiêm chuẩn từ ngày sinh."}
+                      : "Có thể tạo nhiều hồ sơ bé ngay cả khi không đăng nhập."}
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {bootstrap.children.map((child) => (
+                  {children.map((child) => (
                     <button
                       key={child.id}
-                      onClick={() => {
-                        startTransition(() => {
-                          router.push(`/?childId=${child.id}`);
-                          router.refresh();
-                        });
-                      }}
+                      onClick={() => setSelectedChildId(child.id)}
                       className={cn(
                         "rounded-full px-4 py-2 text-sm font-semibold transition",
                         child.id === selectedChild?.id
@@ -381,7 +387,7 @@ export function DashboardApp({
               </div>
 
               {addChildOpen ? (
-                <form className="mt-6 grid gap-3 md:grid-cols-2" onSubmit={createChild}>
+                <form className="mt-6 grid gap-3 md:grid-cols-2" onSubmit={createChildHandler}>
                   <input
                     required
                     value={childForm.name}
@@ -417,10 +423,9 @@ export function DashboardApp({
                   </select>
                   <button
                     type="submit"
-                    disabled={isPending}
-                    className="rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800"
                   >
-                    {isPending ? "Đang khởi tạo..." : "Tạo hồ sơ và sinh lịch mẫu"}
+                    Tạo hồ sơ và sinh lịch mẫu
                   </button>
                 </form>
               ) : null}
@@ -445,9 +450,7 @@ export function DashboardApp({
                     <div className="mt-3 text-4xl font-black text-amber-600">
                       {plannedItems.length}
                     </div>
-                    <p className="mt-2 text-sm text-slate-500">
-                      Các mũi ở trạng thái planned.
-                    </p>
+                    <p className="mt-2 text-sm text-slate-500">Các mũi ở trạng thái planned.</p>
                   </div>
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
                     <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
@@ -474,9 +477,7 @@ export function DashboardApp({
                 </div>
 
                 <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 shadow-soft">
-                  <p className="text-sm font-bold text-amber-900">
-                    Lưu ý y khoa
-                  </p>
+                  <p className="text-sm font-bold text-amber-900">Lưu ý y khoa</p>
                   <p className="mt-2 text-sm leading-6 text-amber-800">
                     Lịch mẫu chỉ mang tính tham khảo cho phụ huynh Việt Nam. Quyết định tiêm,
                     lùi lịch hay bỏ mũi phải được bác sĩ hoặc cơ sở tiêm chủng xác nhận.
@@ -493,12 +494,12 @@ export function DashboardApp({
                         Lịch của {selectedChild.name}
                       </h3>
                     </div>
-                    <a
-                      href={`/api/children/${selectedChild.id}/calendar.ics`}
+                    <button
+                      onClick={downloadCalendar}
                       className="rounded-2xl bg-ink px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slateWarm"
                     >
                       Tải file Calendar (.ics)
-                    </a>
+                    </button>
                   </div>
 
                   <div className="mt-6 flex flex-col gap-3 md:flex-row">
@@ -515,9 +516,7 @@ export function DashboardApp({
                           onClick={() => setTab(filter)}
                           className={cn(
                             "rounded-xl px-4 py-2 text-sm font-semibold transition",
-                            tab === filter
-                              ? "bg-white text-teal-700 shadow"
-                              : "text-slate-600",
+                            tab === filter ? "bg-white text-teal-700 shadow" : "text-slate-600",
                           )}
                         >
                           {filter === "all"
@@ -532,9 +531,7 @@ export function DashboardApp({
 
                   <div className="mt-6 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        Thêm mũi ngoài lịch mẫu
-                      </p>
+                      <p className="text-sm font-semibold text-slate-800">Thêm mũi ngoài lịch mẫu</p>
                       <p className="text-sm text-slate-500">
                         Dùng khi bác sĩ chỉ định thêm, đổi hoặc nhập lịch cũ.
                       </p>
@@ -577,10 +574,7 @@ export function DashboardApp({
                         required
                         value={customForm.disease}
                         onChange={(event) =>
-                          setCustomForm((current) => ({
-                            ...current,
-                            disease: event.target.value,
-                          }))
+                          setCustomForm((current) => ({ ...current, disease: event.target.value }))
                         }
                         placeholder="Bệnh phòng ngừa"
                         className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
@@ -589,10 +583,7 @@ export function DashboardApp({
                         required
                         value={customForm.origin}
                         onChange={(event) =>
-                          setCustomForm((current) => ({
-                            ...current,
-                            origin: event.target.value,
-                          }))
+                          setCustomForm((current) => ({ ...current, origin: event.target.value }))
                         }
                         placeholder="Xuất xứ"
                         className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
@@ -611,10 +602,7 @@ export function DashboardApp({
                       <input
                         value={customForm.milestone}
                         onChange={(event) =>
-                          setCustomForm((current) => ({
-                            ...current,
-                            milestone: event.target.value,
-                          }))
+                          setCustomForm((current) => ({ ...current, milestone: event.target.value }))
                         }
                         placeholder="Mốc hiển thị"
                         className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
@@ -633,10 +621,7 @@ export function DashboardApp({
                       <textarea
                         value={customForm.notes}
                         onChange={(event) =>
-                          setCustomForm((current) => ({
-                            ...current,
-                            notes: event.target.value,
-                          }))
+                          setCustomForm((current) => ({ ...current, notes: event.target.value }))
                         }
                         placeholder="Ghi chú"
                         className="min-h-28 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white md:col-span-2"
@@ -666,9 +651,7 @@ export function DashboardApp({
                               <h4 className="mt-3 text-xl font-black text-slate-900">
                                 {item.vaccine_name}
                               </h4>
-                              <p className="mt-2 text-sm leading-6 text-slate-600">
-                                {item.disease}
-                              </p>
+                              <p className="mt-2 text-sm leading-6 text-slate-600">{item.disease}</p>
                               <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-500">
                                 <span className="rounded-full bg-white px-3 py-1">
                                   {formatDateLabel(item.scheduled_date)}
@@ -744,11 +727,11 @@ export function DashboardApp({
                           {isEditing ? (
                             <form
                               className="mt-5 grid gap-3 border-t border-slate-200 pt-5 md:grid-cols-2"
-                              onSubmit={async (event) => {
+                              onSubmit={(event) => {
                                 event.preventDefault();
                                 const formData = new FormData(event.currentTarget);
                                 const nextStatus = String(formData.get("status")) as ScheduleItemStatus;
-                                await updateItem(item.id, nextStatus, formData);
+                                updateItem(item.id, nextStatus, formData);
                               }}
                             >
                               <input
@@ -829,27 +812,26 @@ export function DashboardApp({
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
                 Reminder settings
               </p>
-              <h3 className="mt-2 text-2xl font-black text-slate-900">
-                Nhắc lịch miễn phí
-              </h3>
+              <h3 className="mt-2 text-2xl font-black text-slate-900">Nhắc lịch miễn phí</h3>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                Cách ổn định và không tốn phí nhất ở giai đoạn này là đưa lịch vào Calendar của
-                người dùng. File `.ics` đã có sẵn 2 mốc nhắc: trước 1 ngày và trước 2 giờ.
+                Với guest mode, nhắc lịch phù hợp nhất là lưu vào Calendar của người dùng. Không
+                cần OTP, không cần email server, không cần domain.
               </p>
 
               <div className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm leading-6 text-teal-950">
                 <p className="font-semibold">Cách dùng ngay</p>
                 <p className="mt-1">
-                  Tải file calendar cho cả bé, rồi import vào Google Calendar, Apple Calendar
-                  hoặc Outlook. Sau khi import, nhắc lịch sẽ do app lịch của người dùng xử lý.
+                  Tải file calendar cho cả bé, rồi import vào Google Calendar, Apple Calendar hoặc
+                  Outlook. File `.ics` đã có nhắc trước 1 ngày và trước 2 giờ.
                 </p>
                 {selectedChild ? (
-                  <a
-                    href={`/api/children/${selectedChild.id}/calendar.ics`}
+                  <button
+                    type="button"
+                    onClick={downloadCalendar}
                     className="mt-4 inline-flex rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800"
                   >
                     Tải calendar của {selectedChild.name}
-                  </a>
+                  </button>
                 ) : null}
               </div>
 
@@ -871,9 +853,7 @@ export function DashboardApp({
                         rel="noreferrer"
                         className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-teal-300 hover:bg-teal-50"
                       >
-                        <div className="text-sm font-semibold text-slate-900">
-                          {item.vaccine_name}
-                        </div>
+                        <div className="text-sm font-semibold text-slate-900">{item.vaccine_name}</div>
                         <div className="mt-1 text-sm text-slate-500">
                           {formatDateTimeLabel(
                             `${item.scheduled_date}T${item.appointment_time_local}`,
@@ -886,20 +866,12 @@ export function DashboardApp({
                 </div>
               ) : null}
 
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                <p className="font-semibold text-slate-800">Email nhắc lịch là tùy chọn</p>
-                <p className="mt-1">
-                  Chỉ cần cấu hình Resend khi anh muốn hệ thống tự gửi email cho nhiều người dùng.
-                  Nếu chưa cấu hình, app vẫn dùng tốt với Calendar reminder.
-                </p>
-              </div>
-
               <div className="mt-6 space-y-4">
                 <label className="block space-y-2">
                   <span className="text-sm font-semibold text-slate-700">Email nhận nhắc</span>
                   <input
                     type="email"
-                    value={reminderEmailValue}
+                    value={reminderForm.reminder_email ?? ""}
                     onChange={(event) =>
                       setReminderForm((current) => ({
                         ...current,
@@ -960,13 +932,6 @@ export function DashboardApp({
               >
                 Lưu cài đặt reminder
               </button>
-
-              {!bootstrap.emailReminderConfigured ? (
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  Resend chưa được cấu hình, nên cài đặt này mới chỉ lưu preference. Cron email sẽ
-                  tự bỏ qua an toàn cho đến khi bật provider.
-                </p>
-              ) : null}
             </form>
 
             <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
@@ -974,11 +939,12 @@ export function DashboardApp({
                 Mức triển khai
               </p>
               <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                <li>OTP email qua Supabase Auth.</li>
-                <li>Dữ liệu lịch và trạng thái nằm trên Postgres.</li>
-                <li>Nhắc miễn phí qua Google Calendar, Apple Calendar hoặc Outlook bằng file `.ics`.</li>
-                <li>Email nhắc thật qua Resend là tùy chọn khi cần public rộng.</li>
-                <li>Sẵn đường nâng cấp cho multi-child và clinic mode.</li>
+                <li>Không đăng nhập vẫn tạo được nhiều hồ sơ bé.</li>
+                <li>Dữ liệu guest chỉ lưu trong local storage của trình duyệt này.</li>
+                <li>Calendar `.ics` là đường nhắc lịch miễn phí mặc định.</li>
+                <li>
+                  Nếu muốn đồng bộ lên database và dùng OTP, vào <a className="text-teal-700 underline" href="/login">/login</a>.
+                </li>
               </ul>
             </div>
           </aside>
