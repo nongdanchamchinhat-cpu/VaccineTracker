@@ -72,6 +72,9 @@ export async function PATCH(
       status: body.status,
     });
 
+    const { logAuditEvent } = await import("@/lib/audit");
+    await logAuditEvent(supabase, user.id, "UPDATE_SCHEDULE_ITEM", "member_vaccine_items", id, { status: body.status, vaccine_name: body.vaccine_name });
+
     return NextResponse.json({ item: data });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Unexpected error", 500);

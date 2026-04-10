@@ -1,5 +1,19 @@
 {
   "Index": {
     "title": "Family vaccine tracker, transparent and safe."
+  },
+  "MemberSelector": {
+    "title": "Family Members",
+    "createFirstProfile": "Create your first profile",
+    "bornOn": "Born on",
+    "createProfileToStart": "Create a member to start managing your vaccination schedule.",
+    "memberTypes": {
+      "infant": "Infant",
+      "child": "Child",
+      "teen": "Teen",
+      "adult": "Adult",
+      "senior": "Senior",
+      "pregnant": "Pregnant"
+    }
   }
 }

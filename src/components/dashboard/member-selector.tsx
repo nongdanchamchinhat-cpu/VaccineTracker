@@ -5,7 +5,8 @@ import { useTransition, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { FamilyMember, MemberType } from "@/lib/types";
 import { cn, formatDateLabel } from "@/lib/utils";
-import { MEMBER_TYPE_ICONS, MEMBER_TYPE_LABELS } from "@/lib/constants";
+import { MEMBER_TYPE_ICONS } from "@/lib/constants";
+import { useTranslations } from "next-intl";
 
 interface MemberSelectorProps {
   members: FamilyMember[];
@@ -21,6 +22,7 @@ export function MemberSelector({
   canManageMembers,
 }: MemberSelectorProps) {
   const router = useRouter();
+  const t = useTranslations("MemberSelector");
   const [isPending, startTransition] = useTransition();
   const [addMemberOpen, setAddMemberOpen] = useState(members.length === 0);
   const [memberForm, setMemberForm] = useState({
@@ -80,7 +82,7 @@ export function MemberSelector({
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-teal-700">
-            Thành viên gia đình
+            {t("title")}
           </p>
           <h2 className="mt-2 flex items-center gap-2 text-2xl font-black text-slate-900">
             {selectedMember ? (
@@ -89,13 +91,13 @@ export function MemberSelector({
                 <span>{selectedMember.name}</span>
               </>
             ) : (
-              "Tạo hồ sơ đầu tiên"
+              t("createFirstProfile")
             )}
           </h2>
           <p className="mt-1 text-sm text-slate-500">
             {selectedMember
-              ? `${MEMBER_TYPE_LABELS[selectedMember.member_type]} · Sinh ngày ${formatDateLabel(selectedMember.birth_date)}`
-              : "Tạo thành viên để bắt đầu quản lý lịch tiêm chủng."}
+              ? `${t(`memberTypes.${selectedMember.member_type}`)} · ${t("bornOn")} ${formatDateLabel(selectedMember.birth_date)}`
+              : t("createProfileToStart")}
           </p>
         </div>
 
@@ -160,8 +162,8 @@ export function MemberSelector({
             }
             className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
           >
-            {Object.entries(MEMBER_TYPE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{MEMBER_TYPE_ICONS[value as MemberType]} {label}</option>
+            {(Object.keys(MEMBER_TYPE_ICONS) as MemberType[]).map((value) => (
+              <option key={value} value={value}>{MEMBER_TYPE_ICONS[value]} {t(`memberTypes.${value}`)}</option>
             ))}
           </select>
           <select

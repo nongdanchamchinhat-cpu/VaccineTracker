@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FamilyMember, VaccineTemplate } from "@/lib/types";
 
@@ -18,6 +18,10 @@ export function CustomItemForm({
   const router = useRouter();
   const [customFormOpen, setCustomFormOpen] = useState(false);
   const [vaccineSuggestions, setVaccineSuggestions] = useState<VaccineTemplate[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const [customForm, setCustomForm] = useState({
     vaccine_name: "",
     disease: "",
@@ -29,20 +33,39 @@ export function CustomItemForm({
     notes: "",
   });
 
-  async function searchTemplates(query: string) {
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setVaccineSuggestions([]);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function searchTemplates(query: string) {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    
     if (query.length < 2) {
       setVaccineSuggestions([]);
+      setIsSearching(false);
       return;
     }
-    try {
-      const resp = await fetch(`/api/vaccine-templates/search?q=${encodeURIComponent(query)}`);
-      if (resp.ok) {
-        const payload = await resp.json();
-        setVaccineSuggestions(payload.templates || []);
+
+    setIsSearching(true);
+    timeoutRef.current = setTimeout(async () => {
+      try {
+        const resp = await fetch(`/api/vaccine-templates/search?q=${encodeURIComponent(query)}`);
+        if (resp.ok) {
+          const payload = await resp.json();
+          setVaccineSuggestions(payload.templates || []);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setIsSearching(false);
       }
-    } catch {
-      // ignore
-    }
+    }, 300);
   }
 
   function selectTemplate(t: VaccineTemplate) {
@@ -113,26 +136,33 @@ export function CustomItemForm({
 
       {customFormOpen && !disabled ? (
         <form className="mt-6 grid gap-3 md:grid-cols-2" onSubmit={createCustomItem}>
-          <div className="relative md:col-span-2">
-            <input
-              required
-              value={customForm.vaccine_name}
-              onChange={(event) => {
-                const val = event.target.value;
-                setCustomForm(curr => ({ ...curr, vaccine_name: val }));
-                searchTemplates(val);
-              }}
-              placeholder="Tên vaccine (nhập để tìm mẫu)"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
-            />
+          <div className="relative md:col-span-2" ref={containerRef}>
+            <div className="relative">
+               <input
+                 required
+                 value={customForm.vaccine_name}
+                 onChange={(event) => {
+                   const val = event.target.value;
+                   setCustomForm(curr => ({ ...curr, vaccine_name: val }));
+                   searchTemplates(val);
+                 }}
+                 placeholder="Tên vaccine (nhập để tìm mẫu chuẩn)"
+                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white pr-10"
+               />
+               {isSearching && (
+                 <div className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-teal-600"></div>
+               )}
+            </div>
+            
             {vaccineSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-60 overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Gợi ý từ dữ liệu chuẩn</div>
                 {vaccineSuggestions.map(t => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => selectTemplate(t)}
-                    className="w-full rounded-xl px-4 py-3 text-left hover:bg-slate-50"
+                    className="w-full rounded-xl px-4 py-3 text-left transition hover:bg-slate-50 focus:bg-teal-50 focus:outline-none"
                   >
                     <div className="font-bold text-slate-900">{t.vaccine_name}</div>
                     <div className="text-xs text-slate-500">{t.disease} · {t.origin}</div>

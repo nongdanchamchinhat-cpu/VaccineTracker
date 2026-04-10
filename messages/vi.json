@@ -1,5 +1,19 @@
 {
   "Index": {
     "title": "Quản lý lịch tiêm cho cả gia đình, minh bạch và an toàn."
+  },
+  "MemberSelector": {
+    "title": "Thành viên gia đình",
+    "createFirstProfile": "Tạo hồ sơ đầu tiên",
+    "bornOn": "Sinh ngày",
+    "createProfileToStart": "Tạo thành viên để bắt đầu quản lý lịch tiêm chủng.",
+    "memberTypes": {
+      "infant": "Sơ sinh",
+      "child": "Trẻ em",
+      "teen": "Thiếu niên",
+      "adult": "Người lớn",
+      "senior": "Cao tuổi",
+      "pregnant": "Mang thai"
+    }
   }
 }

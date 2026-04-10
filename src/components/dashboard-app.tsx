@@ -18,8 +18,11 @@ import { TimelineItem } from "./dashboard/timeline-item";
 import { HouseholdManager } from "./dashboard/household-manager";
 import { ReminderSettingsForm } from "./dashboard/reminder-settings-form";
 import { AccountManager } from "./dashboard/account-manager";
+import { CalendarView } from "./dashboard/calendar-view";
+import { UpcomingWidget } from "./dashboard/upcoming-widget";
 
 type FilterTab = "all" | "todo" | "overdue" | "done";
+type ViewMode = "timeline" | "calendar";
 
 function getDefaultReminderPreferences(
   selectedMemberId: string | undefined,
@@ -51,6 +54,7 @@ export function DashboardApp({
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("timeline");
   const [toast, setToast] = useState<string | null>(null);
   const [shiftProposal, setShiftProposal] = useState<{
     targetId: string;
@@ -219,12 +223,29 @@ export function DashboardApp({
                   </div>
 
                   <div className="mt-6 flex flex-col gap-3 md:flex-row">
+                    <div className="flex bg-slate-200/50 p-1 rounded-2xl mr-2">
+                       <button 
+                         onClick={() => setViewMode("timeline")}
+                         className={cn("px-4 py-2 text-sm font-semibold rounded-xl transition", viewMode === "timeline" ? "bg-white shadow text-teal-700" : "text-slate-500")}
+                       >
+                         Timeline
+                       </button>
+                       <button 
+                         onClick={() => setViewMode("calendar")}
+                         className={cn("px-4 py-2 text-sm font-semibold rounded-xl transition", viewMode === "calendar" ? "bg-white shadow text-teal-700" : "text-slate-500")}
+                       >
+                         Lịch (Tháng)
+                       </button>
+                    </div>
+                    {viewMode === "timeline" && (
                     <input
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Tìm theo tên mũi, bệnh hoặc mốc"
                       className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                     />
+                    )}
+                    {viewMode === "timeline" && (
                     <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
                       {(["all", "todo", "overdue", "done"] as FilterTab[]).map((filter) => (
                         <button
@@ -247,20 +268,25 @@ export function DashboardApp({
                         </button>
                       ))}
                     </div>
+                    )}
                   </div>
 
-                  <div className="mt-6 space-y-4">
-                    {filteredItems.map((item) => (
-                      <TimelineItem
-                        key={item.id}
-                        item={item}
-                        selectedMember={selectedMember}
-                        onNotify={notify}
-                        onShiftProposal={handleShiftProposal}
-                        disabled={!canEditSelectedMember}
-                      />
-                    ))}
-                  </div>
+                  {viewMode === "timeline" ? (
+                    <div className="mt-6 space-y-4">
+                      {filteredItems.map((item) => (
+                        <TimelineItem
+                          key={item.id}
+                          item={item}
+                          selectedMember={selectedMember}
+                          onNotify={notify}
+                          onShiftProposal={handleShiftProposal}
+                          disabled={!canEditSelectedMember}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <CalendarView items={scheduleItems} />
+                  )}
                 </div>
               </>
             ) : null}
@@ -269,6 +295,7 @@ export function DashboardApp({
           <aside className="space-y-6">
             {selectedMember ? (
               <>
+                <UpcomingWidget scheduleItems={scheduleItems} />
                 <CustomItemForm
                   selectedMember={selectedMember}
                   onNotify={notify}
