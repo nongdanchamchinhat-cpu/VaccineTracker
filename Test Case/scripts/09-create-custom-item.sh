@@ -5,16 +5,16 @@ source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 CASE_ID="AG-AUTO-05"
 require_cookie "$CASE_ID"
 
-CHILD_ID="$(resolve_runtime_value CHILD_ID current_child_id || true)"
-if [[ -z "$CHILD_ID" ]]; then
-  blocked_case "$CASE_ID" "AUTO_SH" "$(runtime_value_path current_child_id)" "Missing CHILD_ID."
+MEMBER_ID="$(resolve_runtime_value MEMBER_ID current_member_id || true)"
+if [[ -z "$MEMBER_ID" ]]; then
+  blocked_case "$CASE_ID" "AUTO_SH" "$(runtime_value_path current_member_id)" "Missing MEMBER_ID."
 fi
 
 ARTIFACT="$ARTIFACT_DIR/${CASE_ID}-custom-item.json"
 STATUS="$(curl -sS -b "$COOKIE_JAR" \
   -H "Content-Type: application/json" \
   -X POST "$BASE_URL/api/schedule-items" \
-  -d "{\"child_id\":\"$CHILD_ID\",\"vaccine_name\":\"Test Custom Vaccine\",\"disease\":\"Test Disease\",\"origin\":\"VN\",\"estimated_price\":123000,\"scheduled_date\":\"2026-09-01\",\"milestone\":\"Mui tu tao\",\"recommended_age_label\":\"Tuy chinh\",\"notes\":\"created by antigravity\"}" \
+  -d "{\"member.id\":\"$MEMBER_ID\",\"vaccine_name\":\"Test Custom Vaccine\",\"disease\":\"Test Disease\",\"origin\":\"VN\",\"estimated_price\":123000,\"scheduled_date\":\"2026-09-01\",\"milestone\":\"Mui tu tao\",\"recommended_age_label\":\"Tuy chinh\",\"notes\":\"created by antigravity\"}" \
   -o "$ARTIFACT" -w "%{http_code}" || true)"
 maybe_blocked_from_response "$CASE_ID" "$ARTIFACT" "$STATUS"
 

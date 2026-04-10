@@ -5,13 +5,13 @@ source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 CASE_ID="AG-AUTO-04"
 require_cookie "$CASE_ID"
 
-CHILD_ID="$(resolve_runtime_value CHILD_ID current_child_id || true)"
-if [[ -z "$CHILD_ID" ]]; then
-  blocked_case "$CASE_ID" "AUTO_SH" "$(runtime_value_path current_child_id)" "Missing CHILD_ID."
+MEMBER_ID="$(resolve_runtime_value MEMBER_ID current_member_id || true)"
+if [[ -z "$MEMBER_ID" ]]; then
+  blocked_case "$CASE_ID" "AUTO_SH" "$(runtime_value_path current_member_id)" "Missing MEMBER_ID."
 fi
 
 ARTIFACT="$ARTIFACT_DIR/${CASE_ID}-schedule.json"
-STATUS="$(curl -sS -b "$COOKIE_JAR" -o "$ARTIFACT" -w "%{http_code}" "$BASE_URL/api/children/$CHILD_ID/schedule" || true)"
+STATUS="$(curl -sS -b "$COOKIE_JAR" -o "$ARTIFACT" -w "%{http_code}" "$BASE_URL/api/family-members/$MEMBER_ID/schedule" || true)"
 maybe_blocked_from_response "$CASE_ID" "$ARTIFACT" "$STATUS"
 
 if [[ "$STATUS" != "200" ]]; then

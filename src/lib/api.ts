@@ -14,6 +14,9 @@ export async function requireAuthenticatedUser() {
   } = await supabase.auth.getUser();
 
   if (error) {
+    if (error.message === "Auth session missing!") {
+      return { supabase, user: null };
+    }
     throw error;
   }
 

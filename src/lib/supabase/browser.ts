@@ -1,5 +1,3 @@
-"use client";
-
 import { createBrowserClient } from "@supabase/ssr";
 
 import { getSupabasePublicConfig } from "@/lib/supabase/common";

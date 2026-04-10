@@ -4,7 +4,7 @@ source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
 CASE_ID="AG-PRE-03"
 ARTIFACT="$ARTIFACT_DIR/${CASE_ID}.json"
-STATUS="$(curl -sS -o "$ARTIFACT" -w "%{http_code}" "$BASE_URL/api/me/children" || true)"
+STATUS="$(curl -sS -o "$ARTIFACT" -w "%{http_code}" "$BASE_URL/api/me/family-members" || true)"
 maybe_blocked_from_response "$CASE_ID" "$ARTIFACT" "$STATUS"
 
 if [[ "$STATUS" != "401" ]]; then

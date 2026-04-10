@@ -6,7 +6,7 @@ CASE_ID="AG-MAN-02"
 require_cookie "$CASE_ID"
 
 ARTIFACT="$ARTIFACT_DIR/${CASE_ID}-session.json"
-STATUS="$(curl -sS -b "$COOKIE_JAR" -o "$ARTIFACT" -w "%{http_code}" "$BASE_URL/api/me/children" || true)"
+STATUS="$(curl -sS -b "$COOKIE_JAR" -o "$ARTIFACT" -w "%{http_code}" "$BASE_URL/api/me/family-members" || true)"
 maybe_blocked_from_response "$CASE_ID" "$ARTIFACT" "$STATUS"
 
 if [[ "$STATUS" != "200" ]]; then

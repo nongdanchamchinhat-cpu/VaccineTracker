@@ -1,6 +1,6 @@
-# Kobe Tracker
+# Family Vaccine Tracker
 
-Kobe Tracker đã được nâng từ prototype HTML sang một ứng dụng Next.js multi-user cho phụ huynh Việt Nam.
+Ứng dụng Next.js + Supabase để quản lý lịch tiêm cho cả gia đình: trẻ sơ sinh, trẻ em, thiếu niên, người lớn, cao tuổi và thai kỳ.
 
 ## Stack
 
@@ -14,14 +14,14 @@ Kobe Tracker đã được nâng từ prototype HTML sang một ứng dụng Nex
 ## Tính năng đã implement
 
 - Đăng nhập bằng OTP email
-- Tạo nhiều hồ sơ bé trên cùng một tài khoản
-- Khởi tạo lịch từ bộ template `vn_default_v1`
+- Tạo nhiều thành viên gia đình trên cùng một tài khoản
+- Khởi tạo lịch theo `member_type` từ các bộ template phù hợp
 - Timeline lịch tiêm với filter `Tất cả / Cần tiêm / Đã tiêm`
 - Mark complete, skip, cập nhật chi phí thực tế
 - Thêm mũi custom ngoài lịch mẫu
-- Export file `.ics` theo từng bé với nhắc `trước 1 ngày` và `trước 2 giờ`
+- Export file `.ics` theo từng thành viên với nhắc `trước 1 ngày` và `trước 2 giờ`
 - Link thêm nhanh từng mũi vào Google Calendar
-- Lưu cài đặt reminder theo từng hồ sơ bé
+- Lưu cài đặt reminder theo từng thành viên
 - Cron gửi email reminder thật qua Resend khi đã cấu hình provider
 - Delivery log chống gửi trùng
 
@@ -37,7 +37,7 @@ Kobe Tracker đã được nâng từ prototype HTML sang một ứng dụng Nex
 3. Nếu muốn dùng email reminder server-side thì điền thêm:
    - `RESEND_API_KEY`
    - `REMINDER_FROM_EMAIL`
-4. Chạy migration SQL trong [supabase/migrations/0001_init.sql](/Users/alvin/Desktop/App tiêm chủng/supabase/migrations/0001_init.sql).
+4. Chạy các migration trong `supabase/migrations/` theo thứ tự.
 5. Cấu hình Supabase email template để gửi OTP.
 
 ## Chạy local
@@ -51,12 +51,12 @@ env PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin npm run 
 - `POST /api/auth/request-otp`
 - `POST /api/auth/verify-otp`
 - `POST /api/auth/logout`
-- `GET /api/me/children`
+- `GET /api/me/family-members`
 - `PATCH /api/me/reminder-preferences`
-- `POST /api/children`
-- `GET /api/children/:id/schedule`
-- `POST /api/children/:id/schedule/from-template`
-- `GET /api/children/:id/calendar.ics`
+- `POST /api/family-members`
+- `GET /api/family-members/:id/schedule`
+- `POST /api/family-members/:id/schedule/from-template`
+- `GET /api/family-members/:id/calendar.ics`
 - `POST /api/schedule-items`
 - `PATCH /api/schedule-items/:id`
 - `POST /api/schedule-items/:id/complete`
@@ -68,5 +68,5 @@ env PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin npm run 
 - Route cron kiểm tra header `Authorization: Bearer $CRON_SECRET`.
 - Nếu chưa có `RESEND_API_KEY` và `REMINDER_FROM_EMAIL`, cron sẽ tự bỏ qua email reminder thay vì fail runtime.
 - Calendar export là đường nhắc lịch miễn phí mặc định của v1.
-- Email reminder gộp theo bé và theo cửa sổ nhắc `before_1_day` / `before_2_hours`.
+- Email reminder gộp theo thành viên và theo cửa sổ nhắc `before_1_day` / `before_2_hours`.
 - App chỉ hỗ trợ thị trường Việt Nam trong v1 và có disclaimer rõ ràng trong UI.

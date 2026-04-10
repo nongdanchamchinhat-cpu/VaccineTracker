@@ -5,20 +5,20 @@ source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 CASE_ID="AG-AUTO-03"
 require_cookie "$CASE_ID"
 
-CHILD_ID="$(resolve_runtime_value CHILD_ID current_child_id || true)"
-if [[ -z "$CHILD_ID" ]]; then
-  blocked_case "$CASE_ID" "AUTO_SH" "$(runtime_value_path current_child_id)" "Missing CHILD_ID."
+MEMBER_ID="$(resolve_runtime_value MEMBER_ID current_member_id || true)"
+if [[ -z "$MEMBER_ID" ]]; then
+  blocked_case "$CASE_ID" "AUTO_SH" "$(runtime_value_path current_member_id)" "Missing MEMBER_ID."
 fi
 
 BEFORE_ARTIFACT="$ARTIFACT_DIR/${CASE_ID}-before.json"
 AFTER_ARTIFACT="$ARTIFACT_DIR/${CASE_ID}-after.json"
 REGEN_ARTIFACT="$ARTIFACT_DIR/${CASE_ID}-regen.json"
 
-curl -sS -b "$COOKIE_JAR" "$BASE_URL/api/children/$CHILD_ID/schedule" -o "$BEFORE_ARTIFACT"
+curl -sS -b "$COOKIE_JAR" "$BASE_URL/api/family-members/$MEMBER_ID/schedule" -o "$BEFORE_ARTIFACT"
 BEFORE_COUNT="$(json_length "$BEFORE_ARTIFACT" "items")"
 
-curl -sS -b "$COOKIE_JAR" -X POST "$BASE_URL/api/children/$CHILD_ID/schedule/from-template" -o "$REGEN_ARTIFACT"
-curl -sS -b "$COOKIE_JAR" "$BASE_URL/api/children/$CHILD_ID/schedule" -o "$AFTER_ARTIFACT"
+curl -sS -b "$COOKIE_JAR" -X POST "$BASE_URL/api/family-members/$MEMBER_ID/schedule/from-template" -o "$REGEN_ARTIFACT"
+curl -sS -b "$COOKIE_JAR" "$BASE_URL/api/family-members/$MEMBER_ID/schedule" -o "$AFTER_ARTIFACT"
 AFTER_COUNT="$(json_length "$AFTER_ARTIFACT" "items")"
 
 if [[ "$BEFORE_COUNT" != "$AFTER_COUNT" ]]; then

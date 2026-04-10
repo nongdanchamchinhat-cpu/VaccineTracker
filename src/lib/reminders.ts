@@ -1,39 +1,44 @@
 import { DateTime } from "luxon";
 
-import { ReminderKey, ReminderPreferences, ScheduleItem } from "@/lib/types";
+import { ReminderOffset, ReminderPreferences, ScheduleItem } from "@/lib/types";
 import { DEFAULT_APPOINTMENT_TIME } from "@/lib/constants";
 
-export const REMINDER_WINDOWS: Array<{
-  key: ReminderKey;
-  delta: { days?: number; hours?: number };
-}> = [
-  { key: "before_1_day", delta: { days: 1 } },
-  { key: "before_2_hours", delta: { hours: 2 } },
-];
+export const DEFAULT_REMINDER_OFFSETS: ReminderOffset[] = [{ days: 1 }, { hours: 2 }];
 
-export function getReminderScheduledAt(
+export function getOffsetKey(offset: ReminderOffset): string {
+  if (offset.days) return `before_${offset.days}_day`;
+  if (offset.hours) return `before_${offset.hours}_hour`;
+  if (offset.minutes) return `before_${offset.minutes}_minute`;
+  return "custom_offset";
+}
+
+export function getReminderScheduledAtWithOffset(
   item: ScheduleItem,
   timezone: string,
-  reminderKey: ReminderKey,
+  offset: ReminderOffset,
 ) {
   const appointment = DateTime.fromISO(
     `${item.scheduled_date}T${item.appointment_time_local || DEFAULT_APPOINTMENT_TIME}`,
     { zone: timezone },
   );
 
-  if (reminderKey === "before_1_day") {
-    return appointment.minus({ days: 1 }).toUTC();
-  }
-
-  return appointment.minus({ hours: 2 }).toUTC();
+  return appointment.minus(offset).toUTC();
 }
 
-export function isReminderEnabled(
-  preferences: ReminderPreferences,
-  reminderKey: ReminderKey,
+export function normalizeReminderOffsets(
+  offsets: ReminderOffset[] | null | undefined,
+  preferences?: Pick<ReminderPreferences, "remind_one_day" | "remind_two_hours">,
 ) {
-  if (!preferences.email_enabled) return false;
-  return reminderKey === "before_1_day"
-    ? preferences.remind_one_day
-    : preferences.remind_two_hours;
+  if (offsets && offsets.length > 0) {
+    return offsets;
+  }
+
+  if (preferences) {
+    const derived: ReminderOffset[] = [];
+    if (preferences.remind_one_day) derived.push({ days: 1 });
+    if (preferences.remind_two_hours) derived.push({ hours: 2 });
+    return derived;
+  }
+
+  return DEFAULT_REMINDER_OFFSETS;
 }

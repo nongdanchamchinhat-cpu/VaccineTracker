@@ -1,11 +1,14 @@
-import { DateTime } from "luxon";
 import { NextRequest, NextResponse } from "next/server";
 
 import { logError, logInfo } from "@/lib/logger";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { sendReminderEmail } from "@/lib/email";
-import { getReminderScheduledAt, isReminderEnabled, REMINDER_WINDOWS } from "@/lib/reminders";
-import { ChildProfile, ReminderPreferences, ReminderKey, ScheduleItem } from "@/lib/types";
+import {
+  FamilyMember,
+  NotificationDelivery,
+  ReminderPreferences,
+  ScheduleItem,
+} from "@/lib/types";
 
 function isCronAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -30,147 +33,202 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createAdminSupabaseClient();
-    const now = DateTime.utc();
-    const windowStart = now.minus({ minutes: 15 });
+    const nowIso = new Date().toISOString();
 
-    const { data: preferencesData, error: preferencesError } = await admin
-      .from("reminder_preferences")
-      .select("*, children(*)")
-      .eq("email_enabled", true);
+    const { data: deliveriesData, error: deliveriesError } = await admin
+      .from("notification_deliveries")
+      .select("*")
+      .eq("status", "pending")
+      .lte("scheduled_for", nowIso)
+      .order("scheduled_for", { ascending: true });
 
-    if (preferencesError) {
-      throw preferencesError;
+    if (deliveriesError) throw deliveriesError;
+
+    const dueDeliveries = (deliveriesData ?? []) as NotificationDelivery[];
+
+    if (dueDeliveries.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        inspectedMembers: 0,
+        inspectedDeliveries: 0,
+        sentGroups: 0,
+      });
     }
 
-    let sentGroups = 0;
-    const inspectedChildren = (preferencesData ?? []).length;
+    const memberIds = [...new Set(dueDeliveries.map((delivery) => delivery.member_id))];
+    const itemIds = [...new Set(dueDeliveries.map((delivery) => delivery.member_vaccine_item_id))];
 
-    for (const record of preferencesData ?? []) {
-      const preference = record as ReminderPreferences & { children: ChildProfile };
-      const child = preference.children;
-
-      const { data: itemsData, error: itemsError } = await admin
-        .from("child_vaccine_items")
+    const [
+      { data: preferencesData, error: preferencesError },
+      { data: membersData, error: membersError },
+      { data: itemsData, error: itemsError },
+    ] = await Promise.all([
+      admin
+        .from("reminder_preferences")
         .select("*")
-        .eq("child_id", child.id)
-        .eq("status", "planned")
-        .gte("scheduled_date", now.minus({ days: 1 }).toISODate())
-        .lte("scheduled_date", now.plus({ days: 2 }).toISODate())
-        .order("scheduled_date", { ascending: true });
+        .in("member_id", memberIds)
+        .eq("email_enabled", true),
+      admin.from("family_members").select("*").in("id", memberIds),
+      admin
+        .from("member_vaccine_items")
+        .select("*")
+        .in("id", itemIds)
+        .eq("status", "planned"),
+    ]);
 
-      if (itemsError) {
-        throw itemsError;
+    if (preferencesError) throw preferencesError;
+    if (membersError) throw membersError;
+    if (itemsError) throw itemsError;
+
+    const preferenceByMemberId = new Map(
+      ((preferencesData ?? []) as ReminderPreferences[]).map((preference) => [
+        preference.member_id,
+        preference,
+      ]),
+    );
+    const memberById = new Map(
+      ((membersData ?? []) as FamilyMember[]).map((member) => [member.id, member]),
+    );
+    const itemById = new Map(
+      ((itemsData ?? []) as ScheduleItem[]).map((item) => [item.id, item]),
+    );
+
+    let sentGroups = 0;
+    const groupedDeliveries = new Map<
+      string,
+      {
+        member: FamilyMember;
+        preference: ReminderPreferences;
+        reminderKey: string;
+        deliveries: NotificationDelivery[];
+        items: ScheduleItem[];
+      }
+    >();
+    const staleDeliveryIds: string[] = [];
+
+    for (const delivery of dueDeliveries) {
+      const preference = preferenceByMemberId.get(delivery.member_id);
+      const member = memberById.get(delivery.member_id);
+      const item = itemById.get(delivery.member_vaccine_item_id);
+
+      if (
+        !preference ||
+        !member ||
+        !item ||
+        !preference.reminder_email
+      ) {
+        staleDeliveryIds.push(delivery.id);
+        continue;
       }
 
-      const items = (itemsData ?? []) as ScheduleItem[];
+      const groupKey = `${delivery.member_id}:${delivery.reminder_key}`;
+      const existingGroup = groupedDeliveries.get(groupKey);
 
-      for (const window of REMINDER_WINDOWS) {
-        if (!isReminderEnabled(preference, window.key)) continue;
-        if (!preference.reminder_email) continue;
+      if (existingGroup) {
+        existingGroup.deliveries.push(delivery);
+        existingGroup.items.push(item);
+        continue;
+      }
 
-        const dueItems = items.filter((item) => {
-          const dueAt = getReminderScheduledAt(item, preference.timezone, window.key);
-          return dueAt <= now && dueAt > windowStart;
+      groupedDeliveries.set(groupKey, {
+        member,
+        preference,
+        reminderKey: delivery.reminder_key,
+        deliveries: [delivery],
+        items: [item],
+      });
+    }
+
+    if (staleDeliveryIds.length > 0) {
+      const { error: staleUpdateError } = await admin
+        .from("notification_deliveries")
+        .update({
+          status: "failed",
+          error_message: "stale_delivery",
+        })
+        .in("id", staleDeliveryIds)
+        .eq("status", "pending");
+
+      if (staleUpdateError) {
+        logError("Failed to mark stale reminder deliveries", staleUpdateError, {
+          deliveryIds: staleDeliveryIds,
+        });
+      }
+    }
+
+    for (const group of groupedDeliveries.values()) {
+      group.items.sort((left, right) => {
+        if (left.scheduled_date !== right.scheduled_date) {
+          return left.scheduled_date.localeCompare(right.scheduled_date);
+        }
+
+        return left.sort_order - right.sort_order;
+      });
+
+      try {
+        const sendResult = await sendReminderEmail({
+          to: group.preference.reminder_email!,
+          memberName: group.member.name,
+          timezone: group.preference.timezone,
+          items: group.items,
+          reminderKey: group.reminderKey,
         });
 
-        if (dueItems.length === 0) continue;
+        const { error: sentUpdateError } = await admin
+          .from("notification_deliveries")
+          .update({
+            status: "sent",
+            sent_at: new Date().toISOString(),
+            provider_message_id: sendResult.data?.id ?? null,
+            error_message: null,
+          })
+          .in(
+            "id",
+            group.deliveries.map((delivery) => delivery.id),
+          )
+          .eq("status", "pending");
 
-        const claimedDeliveries: Array<{ id: string; item: ScheduleItem }> = [];
-
-        for (const item of dueItems) {
-          const scheduledFor = getReminderScheduledAt(
-            item,
-            preference.timezone,
-            window.key,
-          ).toISO();
-
-          const { data: inserted, error: insertError } = await admin
-            .from("notification_deliveries")
-            .upsert(
-              {
-                child_id: child.id,
-                child_vaccine_item_id: item.id,
-                channel: "email",
-                reminder_key: window.key,
-                scheduled_for: scheduledFor,
-                status: "pending",
-                payload: {
-                  child_name: child.name,
-                  vaccine_name: item.vaccine_name,
-                },
-              },
-              {
-                onConflict: "child_vaccine_item_id,channel,reminder_key",
-                ignoreDuplicates: true,
-              },
-            )
-            .select("id")
-            .maybeSingle();
-
-          if (insertError) {
-            logError("Failed to claim reminder delivery", insertError, {
-              childId: child.id,
-              scheduleItemId: item.id,
-              reminderKey: window.key,
-            });
-            continue;
-          }
-
-          if (inserted?.id) {
-            claimedDeliveries.push({ id: inserted.id, item });
-          }
+        if (sentUpdateError) {
+          throw sentUpdateError;
         }
 
-        if (claimedDeliveries.length === 0) continue;
+        sentGroups += 1;
+        logInfo("Reminder email sent", {
+          memberId: group.member.id,
+          reminderKey: group.reminderKey,
+          items: group.items.length,
+        });
+      } catch (error) {
+        const { error: failedUpdateError } = await admin
+          .from("notification_deliveries")
+          .update({
+            status: "failed",
+            error_message: error instanceof Error ? error.message : "Unknown error",
+          })
+          .in(
+            "id",
+            group.deliveries.map((delivery) => delivery.id),
+          )
+          .eq("status", "pending");
 
-        try {
-          const sendResult = await sendReminderEmail({
-            to: preference.reminder_email,
-            childName: child.name,
-            timezone: preference.timezone,
-            items: claimedDeliveries.map((delivery) => delivery.item),
-            reminderKey: window.key as ReminderKey,
-          });
-
-          for (const delivery of claimedDeliveries) {
-            await admin
-              .from("notification_deliveries")
-              .update({
-                status: "sent",
-                sent_at: new Date().toISOString(),
-                provider_message_id: sendResult.data?.id ?? null,
-              })
-              .eq("id", delivery.id);
-          }
-
-          sentGroups += 1;
-          logInfo("Reminder email sent", {
-            childId: child.id,
-            reminderKey: window.key,
-            items: claimedDeliveries.length,
-          });
-        } catch (error) {
-          for (const delivery of claimedDeliveries) {
-            await admin
-              .from("notification_deliveries")
-              .update({
-                status: "failed",
-                error_message: error instanceof Error ? error.message : "Unknown error",
-              })
-              .eq("id", delivery.id);
-          }
-
-          logError("Reminder email failed", error, {
-            childId: child.id,
-            reminderKey: window.key,
+        if (failedUpdateError) {
+          logError("Failed to mark reminder deliveries as failed", failedUpdateError, {
+            memberId: group.member.id,
+            reminderKey: group.reminderKey,
           });
         }
+
+        logError("Reminder email failed", error, {
+          memberId: group.member.id,
+          reminderKey: group.reminderKey,
+        });
       }
     }
 
     return NextResponse.json({
       ok: true,
-      inspectedChildren,
+      inspectedMembers: memberIds.length,
+      inspectedDeliveries: dueDeliveries.length,
       sentGroups,
     });
   } catch (error) {

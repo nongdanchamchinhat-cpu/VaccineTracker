@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { trackEvent } from "@/lib/analytics";
 import { jsonError, requireAuthenticatedUser } from "@/lib/api";
+import { ScheduleItem } from "@/lib/types";
 
 const schema = z.object({
   scheduled_date: z.string().date(),
@@ -12,6 +13,9 @@ const schema = z.object({
   disease: z.string().min(1),
   origin: z.string().min(1),
   notes: z.string().nullable(),
+  lot_number: z.string().nullable().optional(),
+  photo_url: z.string().nullable().optional(),
+  adverse_reactions: z.string().nullable().optional(),
   status: z.enum(["planned", "completed", "skipped"]),
 });
 
@@ -29,7 +33,7 @@ export async function PATCH(
       body.status === "completed" ? new Date().toISOString() : null;
 
     const { data, error } = await supabase
-      .from("child_vaccine_items")
+      .from("member_vaccine_items")
       .update({
         scheduled_date: body.scheduled_date,
         estimated_price: body.estimated_price,
@@ -38,6 +42,9 @@ export async function PATCH(
         disease: body.disease,
         origin: body.origin,
         notes: body.notes,
+        lot_number: body.lot_number ?? null,
+        photo_url: body.photo_url ?? null,
+        adverse_reactions: body.adverse_reactions ?? null,
         status: body.status,
         completed_at: completedAt,
       })
@@ -46,6 +53,18 @@ export async function PATCH(
       .single();
 
     if (error || !data) return jsonError(error?.message ?? "Không thể cập nhật mũi.", 400);
+
+    if (body.status === "completed" && data.recurrence_rule) {
+      const { handleRecurrence } = await import("@/lib/db");
+      const nextRecurringItem = await handleRecurrence(data.member_id, data as ScheduleItem);
+      if (nextRecurringItem) {
+        const { ensurePendingNotifications } = await import("@/lib/reminders-server");
+        await ensurePendingNotifications(supabase, data.member_id, [nextRecurringItem as ScheduleItem]);
+      }
+    }
+
+    const { ensurePendingNotifications } = await import("@/lib/reminders-server");
+    await ensurePendingNotifications(supabase, data.member_id, [data] as ScheduleItem[]);
 
     trackEvent("schedule_item_updated", {
       userId: user.id,

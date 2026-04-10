@@ -1,8 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/i18n/routing";
 
 export function AuthFlow() {
   const router = useRouter();
@@ -59,7 +58,7 @@ export function AuthFlow() {
       }
 
       setStatus(payload.message ?? "Đăng nhập thành công.");
-      router.push("/");
+      router.push({ pathname: "/" });
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mã xác thực không hợp lệ.");
@@ -73,10 +72,10 @@ export function AuthFlow() {
       <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-[32px] bg-ink px-6 py-8 text-white shadow-soft md:px-10 md:py-12">
           <div className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-teal-100">
-            Kobe Tracker V1
+            Family Vaccine Tracker
           </div>
           <h1 className="mt-6 max-w-xl text-4xl font-black leading-tight md:text-5xl">
-            Sổ tay tiêm chủng production-ready cho phụ huynh Việt Nam.
+            Quản lý lịch tiêm cho cả gia đình trên một tài khoản.
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-slate-300">
             Đăng nhập chỉ dành cho người muốn đồng bộ lịch tiêm chủng lên database.
@@ -93,7 +92,7 @@ export function AuthFlow() {
             <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
               <p className="text-sm font-bold text-amber-200">Lịch mẫu + tuỳ chỉnh</p>
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                Tạo lịch từ ngày sinh rồi chỉnh lại từng mũi, chi phí và ngày hẹn.
+                Tạo lịch riêng cho trẻ nhỏ, thiếu niên, người lớn, cao tuổi hoặc thai kỳ.
               </p>
             </div>
           </div>
@@ -112,7 +111,7 @@ export function AuthFlow() {
           </p>
 
           <Link
-            href="/"
+            href={{ pathname: "/" }}
             className="mt-4 inline-flex rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
           >
             Quay lại chế độ không đăng nhập

@@ -62,15 +62,23 @@ export function computeProgress(
 }
 
 export function formatReminderLabel(reminderKey: string) {
-  return reminderKey === "before_1_day" ? "trước 1 ngày" : "trước 2 giờ";
+  const match = reminderKey.match(/^before_(\d+)_(day|hour|minute)s?$/);
+  if (!match) {
+    return reminderKey.replaceAll("_", " ");
+  }
+
+  const [, value, unit] = match;
+  if (unit === "day") return `trước ${value} ngày`;
+  if (unit === "hour") return `trước ${value} giờ`;
+  return `trước ${value} phút`;
 }
 
 export function buildGoogleCalendarUrl({
-  childName,
+  memberName,
   timezone,
   item,
 }: {
-  childName: string;
+  memberName: string;
   timezone: string;
   item: {
     id: string;
@@ -99,7 +107,7 @@ export function buildGoogleCalendarUrl({
 
   const params = new URLSearchParams({
     action: "TEMPLATE",
-    text: `Tiem chung cho ${childName}: ${item.vaccine_name}`,
+    text: `Tiem chung cho ${memberName}: ${item.vaccine_name}`,
     dates: `${start.toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'")}/${end.toUTC().toFormat(
       "yyyyLLdd'T'HHmmss'Z'",
     )}`,

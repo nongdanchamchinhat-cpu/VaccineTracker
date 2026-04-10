@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { jsonError, requireAuthenticatedUser } from "@/lib/api";
 import { generateCalendarICS } from "@/lib/ics";
-import { ChildProfile, ScheduleItem } from "@/lib/types";
+import { FamilyMember, ScheduleItem } from "@/lib/types";
 
 export async function GET(
   _request: Request,
@@ -14,22 +14,22 @@ export async function GET(
 
     const { id } = await context.params;
 
-    const [{ data: child, error: childError }, { data: items, error: itemsError }] =
+    const [{ data: member, error: memberError }, { data: items, error: itemsError }] =
       await Promise.all([
-        supabase.from("children").select("*").eq("id", id).single(),
+        supabase.from("family_members").select("*").eq("id", id).single(),
         supabase
-          .from("child_vaccine_items")
+          .from("member_vaccine_items")
           .select("*")
-          .eq("child_id", id)
+          .eq("member_id", id)
           .order("scheduled_date", { ascending: true }),
       ]);
 
-    if (childError || !child) return jsonError("Không tìm thấy hồ sơ bé.", 404);
+    if (memberError || !member) return jsonError("Không tìm thấy hồ sơ thành viên.", 404);
     if (itemsError) return jsonError(itemsError.message, 400);
 
     const ics = generateCalendarICS({
-      childName: (child as ChildProfile).name,
-      timezone: (child as ChildProfile).timezone,
+      memberName: (member as FamilyMember).name,
+      timezone: (member as FamilyMember).timezone,
       items: (items ?? []) as ScheduleItem[],
     });
 
@@ -37,7 +37,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${(child as ChildProfile).name}-schedule.ics"`,
+        "Content-Disposition": `attachment; filename="${(member as FamilyMember).name}-schedule.ics"`,
       },
     });
   } catch (error) {

@@ -1,9 +1,10 @@
 "use client";
 
+import { DateTime } from "luxon";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
-  createGuestChild,
+  createGuestMember,
   createGuestReminderPreference,
   createGuestScheduleFromTemplates,
   loadGuestStorage,
@@ -11,10 +12,11 @@ import {
 } from "@/lib/guest-local";
 import { generateCalendarICS } from "@/lib/ics";
 import {
-  ChildProfile,
+  FamilyMember,
   ReminderPreferences,
   ScheduleItem,
   ScheduleItemStatus,
+  MemberType,
 } from "@/lib/types";
 import {
   buildGoogleCalendarUrl,
@@ -22,27 +24,54 @@ import {
   computeProgress,
   formatCurrency,
   formatDateLabel,
-  formatDateTimeLabel,
 } from "@/lib/utils";
 import { DEFAULT_APPOINTMENT_TIME, DEFAULT_TIMEZONE } from "@/lib/constants";
+import { normalizeReminderOffsets } from "@/lib/reminders";
 
 type FilterTab = "all" | "todo" | "done";
 
+const MEMBER_TYPE_LABELS: Record<MemberType, string> = {
+  infant: "Sơ sinh",
+  child: "Trẻ em",
+  teen: "Thiếu niên",
+  adult: "Người lớn",
+  senior: "Cao tuổi",
+  pregnant: "Mang thai",
+};
+
+const MEMBER_TYPE_ICONS: Record<MemberType, string> = {
+  infant: "👶",
+  child: "🧒",
+  teen: "🧑‍🎓",
+  adult: "👩‍💼",
+  senior: "👵",
+  pregnant: "🤰",
+};
+
 function getDefaultReminderPreferences(
-  selectedChild: ChildProfile | null,
+  selectedMember: FamilyMember | null,
   existing: ReminderPreferences | null,
 ) {
-  if (existing) return existing;
+  if (existing) {
+    return {
+      ...existing,
+      reminder_offsets: normalizeReminderOffsets(existing.reminder_offsets, existing),
+    };
+  }
 
   return {
     id: "",
-    child_id: selectedChild?.id ?? "",
+    member_id: selectedMember?.id ?? "",
     reminder_email: "",
     channel: "email",
     email_enabled: false,
     remind_one_day: true,
     remind_two_hours: true,
-    timezone: selectedChild?.timezone ?? DEFAULT_TIMEZONE,
+    reminder_offsets: normalizeReminderOffsets(undefined, {
+      remind_one_day: true,
+      remind_two_hours: true,
+    }),
+    timezone: selectedMember?.timezone ?? DEFAULT_TIMEZONE,
     created_at: "",
     updated_at: "",
   } satisfies ReminderPreferences;
@@ -50,24 +79,25 @@ function getDefaultReminderPreferences(
 
 export function GuestDashboardApp() {
   const [ready, setReady] = useState(false);
-  const [children, setChildren] = useState<ChildProfile[]>([]);
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [allScheduleItems, setAllScheduleItems] = useState<ScheduleItem[]>([]);
-  const [reminderPreferencesByChild, setReminderPreferencesByChild] = useState<
+  const [reminderPreferencesByMember, setReminderPreferencesByMember] = useState<
     Record<string, ReminderPreferences>
   >({});
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
   const [toast, setToast] = useState<string | null>(null);
   const [customFormOpen, setCustomFormOpen] = useState(false);
-  const [addChildOpen, setAddChildOpen] = useState(true);
+  const [addMemberOpen, setAddMemberOpen] = useState(true);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [reminderForm, setReminderForm] = useState<ReminderPreferences>(
     getDefaultReminderPreferences(null, null),
   );
-  const [childForm, setChildForm] = useState({
+  const [memberForm, setMemberForm] = useState({
     name: "",
     birthDate: "",
+    memberType: "infant" as MemberType,
     gender: "",
   });
   const [customForm, setCustomForm] = useState({
@@ -83,40 +113,40 @@ export function GuestDashboardApp() {
 
   useEffect(() => {
     const storage = loadGuestStorage();
-    setChildren(storage.children);
-    setSelectedChildId(storage.selectedChildId);
+    setMembers(storage.members);
+    setSelectedMemberId(storage.selectedMemberId);
     setAllScheduleItems(storage.scheduleItems);
-    setReminderPreferencesByChild(storage.reminderPreferencesByChild);
-    setAddChildOpen(storage.children.length === 0);
+    setReminderPreferencesByMember(storage.reminderPreferencesByMember);
+    setAddMemberOpen(storage.members.length === 0);
     setReady(true);
   }, []);
 
   useEffect(() => {
     if (!ready) return;
     saveGuestStorage({
-      children,
-      selectedChildId,
+      members,
+      selectedMemberId,
       scheduleItems: allScheduleItems,
-      reminderPreferencesByChild,
+      reminderPreferencesByMember,
     });
-  }, [allScheduleItems, children, ready, reminderPreferencesByChild, selectedChildId]);
+  }, [allScheduleItems, members, ready, reminderPreferencesByMember, selectedMemberId]);
 
-  const selectedChild =
-    children.find((child) => child.id === selectedChildId) ?? children[0] ?? null;
+  const selectedMember =
+    members.find((m) => m.id === selectedMemberId) ?? members[0] ?? null;
   const scheduleItems = useMemo(
     () =>
-      selectedChild
-        ? allScheduleItems.filter((item) => item.child_id === selectedChild.id)
+      selectedMember
+        ? allScheduleItems.filter((item) => item.member_id === selectedMember.id)
         : [],
-    [allScheduleItems, selectedChild],
+    [allScheduleItems, selectedMember],
   );
-  const reminderPreferences = selectedChild
-    ? reminderPreferencesByChild[selectedChild.id] ?? null
+  const reminderPreferences = selectedMember
+    ? reminderPreferencesByMember[selectedMember.id] ?? null
     : null;
 
   useEffect(() => {
-    setReminderForm(getDefaultReminderPreferences(selectedChild, reminderPreferences));
-  }, [reminderPreferences, selectedChild]);
+    setReminderForm(getDefaultReminderPreferences(selectedMember, reminderPreferences));
+  }, [reminderPreferences, selectedMember]);
 
   const filteredItems = useMemo(() => {
     return scheduleItems.filter((item) => {
@@ -151,11 +181,11 @@ export function GuestDashboardApp() {
   }
 
   function downloadCalendar() {
-    if (!selectedChild) return;
+    if (!selectedMember) return;
 
     const ics = generateCalendarICS({
-      childName: selectedChild.name,
-      timezone: selectedChild.timezone,
+      memberName: selectedMember.name,
+      timezone: selectedMember.timezone,
       items: scheduleItems,
     });
 
@@ -163,7 +193,7 @@ export function GuestDashboardApp() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${selectedChild.name}-schedule.ics`;
+    anchor.download = `${selectedMember.name}-schedule.ics`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -181,60 +211,65 @@ export function GuestDashboardApp() {
     });
   }
 
-  function createChildHandler(event: FormEvent<HTMLFormElement>) {
+  function createMemberHandler(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!childForm.name || !childForm.birthDate) return;
+    if (!memberForm.name || !memberForm.birthDate) return;
 
-    const child = createGuestChild({
-      name: childForm.name,
-      birthDate: childForm.birthDate,
-      gender: childForm.gender || null,
+    const member = createGuestMember({
+      name: memberForm.name,
+      birthDate: memberForm.birthDate,
+      memberType: memberForm.memberType,
+      gender: memberForm.gender || null,
     });
-    const nextItems = createGuestScheduleFromTemplates(child);
-    const nextPreference = createGuestReminderPreference(child);
+    const nextItems = createGuestScheduleFromTemplates(member);
+    const nextPreference = createGuestReminderPreference(member);
 
-    setChildren((current) => [...current, child]);
-    setSelectedChildId(child.id);
+    setMembers((current) => [...current, member]);
+    setSelectedMemberId(member.id);
     setAllScheduleItems((current) => [...current, ...nextItems]);
-    setReminderPreferencesByChild((current) => ({
+    setReminderPreferencesByMember((current) => ({
       ...current,
-      [child.id]: nextPreference,
+      [member.id]: nextPreference,
     }));
-    setChildForm({ name: "", birthDate: "", gender: "" });
-    setAddChildOpen(false);
-    notify("Đã tạo hồ sơ bé và lưu vào local storage.");
+    setMemberForm({ name: "", birthDate: "", memberType: "infant", gender: "" });
+    setAddMemberOpen(false);
+    notify("Đã tạo hồ sơ thành viên và lưu vào local storage.");
   }
 
   function saveReminderPreferences(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedChild) return;
+    if (!selectedMember) return;
 
     const nextPreference: ReminderPreferences = {
-      ...(reminderPreferencesByChild[selectedChild.id] ??
-        createGuestReminderPreference(selectedChild)),
+      ...(reminderPreferencesByMember[selectedMember.id] ??
+        createGuestReminderPreference(selectedMember)),
       reminder_email: reminderForm.reminder_email,
       email_enabled: reminderForm.email_enabled,
       remind_one_day: reminderForm.remind_one_day,
       remind_two_hours: reminderForm.remind_two_hours,
-      timezone: reminderForm.timezone || selectedChild.timezone,
+      reminder_offsets: normalizeReminderOffsets(undefined, {
+        remind_one_day: reminderForm.remind_one_day,
+        remind_two_hours: reminderForm.remind_two_hours,
+      }),
+      timezone: reminderForm.timezone || selectedMember.timezone,
       updated_at: new Date().toISOString(),
     };
 
-    setReminderPreferencesByChild((current) => ({
+    setReminderPreferencesByMember((current) => ({
       ...current,
-      [selectedChild.id]: nextPreference,
+      [selectedMember.id]: nextPreference,
     }));
     notify("Đã lưu cài đặt reminder trong local storage.");
   }
 
   function createCustomItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedChild) return;
+    if (!selectedMember) return;
 
     const now = new Date().toISOString();
     const item: ScheduleItem = {
       id: crypto.randomUUID(),
-      child_id: selectedChild.id,
+      member_id: selectedMember.id,
       template_entry_id: null,
       sort_order: 9000,
       scheduled_date: customForm.scheduled_date,
@@ -250,6 +285,11 @@ export function GuestDashboardApp() {
       notes: customForm.notes || null,
       status: "planned",
       template_source: "custom",
+      min_interval_days_from_prev: null,
+      recurrence_rule: null,
+      lot_number: null,
+      photo_url: null,
+      adverse_reactions: null,
       completed_at: null,
       created_at: now,
       updated_at: now,
@@ -318,11 +358,11 @@ export function GuestDashboardApp() {
                 Guest mode
               </div>
               <h1 className="mt-6 text-3xl font-black leading-tight md:text-5xl">
-                Dùng ngay không cần đăng nhập. Dữ liệu sẽ lưu trong local storage.
+                Quản lý lịch tiêm cho cả gia đình, nhanh chóng và miễn phí.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                Phù hợp khi phụ huynh muốn tạo lịch nhanh, quản lý nhiều bé trên cùng thiết bị và
-                dùng Calendar để nhắc lịch. Đăng nhập chỉ cần khi muốn đồng bộ lên database.
+                Dữ liệu được lưu trực tiếp trên trình duyệt của bạn. Phù hợp khi muốn quản lý ngay 
+                lịch tiêm cho con cái, cha mẹ mà không cần tạo tài khoản.
               </p>
             </div>
 
@@ -330,9 +370,9 @@ export function GuestDashboardApp() {
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-300">
                 Chế độ hiện tại
               </p>
-              <div className="mt-3 text-lg font-bold">Khách / local storage</div>
+              <div className="mt-3 text-lg font-bold">Khách / Local Storage</div>
               <p className="mt-2 text-sm text-slate-300">
-                Không bắt buộc OTP. Dữ liệu chỉ lưu trên trình duyệt và thiết bị đang dùng.
+                Dữ liệu chỉ lưu trên trình duyệt và thiết bị này.
               </p>
               <a
                 href="/login"
@@ -350,59 +390,66 @@ export function GuestDashboardApp() {
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-teal-700">
-                    Hồ sơ bé
+                    Thành viên gia đình
                   </p>
-                  <h2 className="mt-2 text-2xl font-black text-slate-900">
-                    {selectedChild ? selectedChild.name : "Tạo hồ sơ đầu tiên"}
+                  <h2 className="mt-2 flex items-center gap-2 text-2xl font-black text-slate-900">
+                    {selectedMember ? (
+                      <>
+                        <span>{MEMBER_TYPE_ICONS[selectedMember.member_type]}</span>
+                        <span>{selectedMember.name}</span>
+                      </>
+                    ) : (
+                      "Tạo hồ sơ đầu tiên"
+                    )}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    {selectedChild
-                      ? `Sinh ngày ${formatDateLabel(selectedChild.birth_date)} · múi giờ ${selectedChild.timezone}`
-                      : "Có thể tạo nhiều hồ sơ bé ngay cả khi không đăng nhập."}
+                    {selectedMember
+                      ? `${MEMBER_TYPE_LABELS[selectedMember.member_type]} · Sinh ngày ${formatDateLabel(selectedMember.birth_date)}`
+                      : "Tạo hồ sơ thành viên để bắt đầu quản lý lịch tiêm chủng."}
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {children.map((child) => (
+                  {members.map((member) => (
                     <button
-                      key={child.id}
-                      onClick={() => setSelectedChildId(child.id)}
+                      key={member.id}
+                      onClick={() => setSelectedMemberId(member.id)}
                       className={cn(
                         "rounded-full px-4 py-2 text-sm font-semibold transition",
-                        child.id === selectedChild?.id
+                        member.id === selectedMember?.id
                           ? "bg-teal-700 text-white"
                           : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100",
                       )}
                     >
-                      {child.name}
+                      {MEMBER_TYPE_ICONS[member.member_type]} {member.name} · {MEMBER_TYPE_LABELS[member.member_type]}
                     </button>
                   ))}
                   <button
-                    onClick={() => setAddChildOpen((current) => !current)}
+                    onClick={() => setAddMemberOpen((current) => !current)}
                     className="rounded-full border border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-teal-600 hover:text-teal-700"
                   >
-                    {addChildOpen ? "Đóng form" : "Thêm bé"}
+                    {addMemberOpen ? "Đóng form" : "Thêm thành viên"}
                   </button>
                 </div>
               </div>
 
-              {addChildOpen ? (
-                <form className="mt-6 grid gap-3 md:grid-cols-2" onSubmit={createChildHandler}>
+              {addMemberOpen ? (
+                <form className="mt-6 grid gap-3 md:grid-cols-2" onSubmit={createMemberHandler}>
                   <input
                     required
-                    value={childForm.name}
+                    value={memberForm.name}
                     onChange={(event) =>
-                      setChildForm((current) => ({ ...current, name: event.target.value }))
+                      setMemberForm((current) => ({ ...current, name: event.target.value }))
                     }
-                    placeholder="Tên bé"
+                    placeholder="Tên thành viên"
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                   />
                   <input
                     required
                     type="date"
-                    value={childForm.birthDate}
+                    value={memberForm.birthDate}
                     onChange={(event) =>
-                      setChildForm((current) => ({
+                      setMemberForm((current) => ({
                         ...current,
                         birthDate: event.target.value,
                       }))
@@ -410,9 +457,21 @@ export function GuestDashboardApp() {
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                   />
                   <select
-                    value={childForm.gender}
+                    required
+                    value={memberForm.memberType}
                     onChange={(event) =>
-                      setChildForm((current) => ({ ...current, gender: event.target.value }))
+                      setMemberForm((current) => ({ ...current, memberType: event.target.value as MemberType }))
+                    }
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
+                  >
+                    {Object.entries(MEMBER_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{MEMBER_TYPE_ICONS[value as MemberType]} {label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={memberForm.gender}
+                    onChange={(event) =>
+                      setMemberForm((current) => ({ ...current, gender: event.target.value }))
                     }
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                   >
@@ -423,7 +482,7 @@ export function GuestDashboardApp() {
                   </select>
                   <button
                     type="submit"
-                    className="rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800"
+                    className="rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800 md:col-span-2"
                   >
                     Tạo hồ sơ và sinh lịch mẫu
                   </button>
@@ -431,7 +490,7 @@ export function GuestDashboardApp() {
               ) : null}
             </div>
 
-            {selectedChild ? (
+            {selectedMember ? (
               <>
                 <div className="grid gap-4 md:grid-cols-4">
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
@@ -450,7 +509,9 @@ export function GuestDashboardApp() {
                     <div className="mt-3 text-4xl font-black text-amber-600">
                       {plannedItems.length}
                     </div>
-                    <p className="mt-2 text-sm text-slate-500">Các mũi ở trạng thái planned.</p>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Các mũi đang ở trạng thái sắp tiêm.
+                    </p>
                   </div>
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
                     <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
@@ -460,18 +521,18 @@ export function GuestDashboardApp() {
                       {formatCurrency(spent)}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
-                      Tính theo actual price nếu đã nhập.
+                      Tính thực tế nếu có.
                     </p>
                   </div>
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
                     <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                      Dự kiến toàn lịch
+                      Tổng dự kiến
                     </p>
                     <div className="mt-3 text-3xl font-black text-ink">
                       {formatCurrency(projectedBudget)}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
-                      Chi phí theo lịch mẫu và các mũi tự tạo.
+                      Theo lịch mẫu & tự tạo.
                     </p>
                   </div>
                 </div>
@@ -479,7 +540,7 @@ export function GuestDashboardApp() {
                 <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 shadow-soft">
                   <p className="text-sm font-bold text-amber-900">Lưu ý y khoa</p>
                   <p className="mt-2 text-sm leading-6 text-amber-800">
-                    Lịch mẫu chỉ mang tính tham khảo cho phụ huynh Việt Nam. Quyết định tiêm,
+                    Lịch mẫu chỉ mang tính tham khảo. Quyết định tiêm,
                     lùi lịch hay bỏ mũi phải được bác sĩ hoặc cơ sở tiêm chủng xác nhận.
                   </p>
                 </div>
@@ -491,7 +552,7 @@ export function GuestDashboardApp() {
                         Timeline mũi tiêm
                       </p>
                       <h3 className="mt-2 text-2xl font-black text-slate-900">
-                        Lịch của {selectedChild.name}
+                        Lịch của {selectedMember.name}
                       </h3>
                     </div>
                     <button
@@ -533,7 +594,7 @@ export function GuestDashboardApp() {
                     <div>
                       <p className="text-sm font-semibold text-slate-800">Thêm mũi ngoài lịch mẫu</p>
                       <p className="text-sm text-slate-500">
-                        Dùng khi bác sĩ chỉ định thêm, đổi hoặc nhập lịch cũ.
+                        Dùng khi bác sĩ chỉ định thêm hoặc nhập lịch cũ.
                       </p>
                     </div>
                     <button
@@ -615,7 +676,7 @@ export function GuestDashboardApp() {
                             recommended_age_label: event.target.value,
                           }))
                         }
-                        placeholder="Nhãn tuổi gợi ý"
+                        placeholder="Nhãn gợi ý"
                         className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                       />
                       <textarea
@@ -680,7 +741,7 @@ export function GuestDashboardApp() {
                                   ? "Đã tiêm"
                                   : item.status === "skipped"
                                     ? "Bỏ qua"
-                                    : "Planned"}
+                                    : "Sắp tiêm"}
                               </div>
                               <div className="mt-3 text-sm text-slate-500">
                                 Dự kiến: {formatCurrency(item.estimated_price)}
@@ -692,8 +753,8 @@ export function GuestDashboardApp() {
                               <div className="mt-4 flex flex-wrap gap-2">
                                 <a
                                   href={buildGoogleCalendarUrl({
-                                    childName: selectedChild.name,
-                                    timezone: selectedChild.timezone,
+                                    memberName: selectedMember.name,
+                                    timezone: selectedMember.timezone,
                                     item,
                                   })}
                                   target="_blank"
@@ -772,13 +833,14 @@ export function GuestDashboardApp() {
                                 defaultValue={item.status}
                                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-teal-500"
                               >
-                                <option value="planned">planned</option>
-                                <option value="completed">completed</option>
-                                <option value="skipped">skipped</option>
+                                <option value="planned">Sắp tiêm</option>
+                                <option value="completed">Đã tiêm</option>
+                                <option value="skipped">Bỏ qua</option>
                               </select>
                               <textarea
                                 name="notes"
                                 defaultValue={item.notes ?? ""}
+                                placeholder="Ghi chú cá nhân"
                                 className="min-h-28 rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-teal-500 md:col-span-2"
                               />
                               <button
@@ -805,72 +867,58 @@ export function GuestDashboardApp() {
           </div>
 
           <aside className="space-y-6">
-            <form
-              className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft"
-              onSubmit={saveReminderPreferences}
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                Reminder settings
+            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-soft">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-700">
+                Lịch trình sắp tới
               </p>
-              <h3 className="mt-2 text-2xl font-black text-slate-900">Nhắc lịch miễn phí</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                Với guest mode, nhắc lịch phù hợp nhất là lưu vào Calendar của người dùng. Không
-                cần OTP, không cần email server, không cần domain.
-              </p>
-
-              <div className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm leading-6 text-teal-950">
-                <p className="font-semibold">Cách dùng ngay</p>
-                <p className="mt-1">
-                  Tải file calendar cho cả bé, rồi import vào Google Calendar, Apple Calendar hoặc
-                  Outlook. File `.ics` đã có nhắc trước 1 ngày và trước 2 giờ.
-                </p>
-                {selectedChild ? (
-                  <button
-                    type="button"
-                    onClick={downloadCalendar}
-                    className="mt-4 inline-flex rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800"
-                  >
-                    Tải calendar của {selectedChild.name}
-                  </button>
-                ) : null}
+              <div className="mt-6 space-y-6">
+                {topCalendarCandidates.length > 0 ? (
+                  topCalendarCandidates.map((item) => (
+                    <div key={item.id} className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+                        <span className="text-sm font-bold">
+                          {DateTime.fromISO(item.scheduled_date).day}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-slate-900">{item.vaccine_name}</p>
+                        <p className="text-sm text-slate-500">
+                          {formatDateLabel(item.scheduled_date)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">Không có mũi tiêm nào sắp tới.</p>
+                )}
               </div>
 
-              {selectedChild && topCalendarCandidates.length > 0 ? (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-semibold text-slate-800">
-                    Thêm nhanh từng mũi vào Google Calendar
-                  </p>
-                  <div className="mt-3 space-y-3">
-                    {topCalendarCandidates.map((item) => (
-                      <a
-                        key={item.id}
-                        href={buildGoogleCalendarUrl({
-                          childName: selectedChild.name,
-                          timezone: selectedChild.timezone,
-                          item,
-                        })}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-teal-300 hover:bg-teal-50"
-                      >
-                        <div className="text-sm font-semibold text-slate-900">{item.vaccine_name}</div>
-                        <div className="mt-1 text-sm text-slate-500">
-                          {formatDateTimeLabel(
-                            `${item.scheduled_date}T${item.appointment_time_local}`,
-                            selectedChild.timezone,
-                          )}
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+              {selectedMember && (
+                <button
+                  onClick={downloadCalendar}
+                  className="mt-8 block w-full rounded-2xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Đồng bộ toàn bộ lịch (.ics)
+                </button>
+              )}
+            </div>
 
-              <div className="mt-6 space-y-4">
-                <label className="block space-y-2">
-                  <span className="text-sm font-semibold text-slate-700">Email nhận nhắc</span>
+            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-soft">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-700">
+                Nhắc lịch qua Email
+              </p>
+              <div className="mt-4 rounded-xl bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+                ⚠️ Chế độ Khách chỉ hỗ trợ lưu cài đặt cơ bản. Email thật chỉ được gửi trong chế độ
+                đồng bộ DB (Đã đăng nhập).
+              </div>
+              <form className="mt-6 space-y-4" onSubmit={saveReminderPreferences}>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Email nhận tin
+                  </label>
                   <input
                     type="email"
+                    required
                     value={reminderForm.reminder_email ?? ""}
                     onChange={(event) =>
                       setReminderForm((current) => ({
@@ -880,80 +928,89 @@ export function GuestDashboardApp() {
                     }
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                   />
-                </label>
+                </div>
 
-                <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-700">Bật email nhắc lịch</span>
-                  <input
-                    type="checkbox"
-                    checked={reminderForm.email_enabled}
-                    onChange={(event) =>
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="text-sm font-bold">Bật nhắc lịch</p>
+                    <p className="text-xs text-slate-500">Chỉ hoạt động khi đăng nhập</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
                       setReminderForm((current) => ({
                         ...current,
-                        email_enabled: event.target.checked,
+                        email_enabled: !current.email_enabled,
                       }))
                     }
-                  />
-                </label>
+                    className={cn(
+                      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                      reminderForm.email_enabled ? "bg-teal-600" : "bg-slate-200",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                        reminderForm.email_enabled ? "translate-x-5" : "translate-x-0",
+                      )}
+                    />
+                  </button>
+                </div>
 
-                <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-700">Nhắc trước 1 ngày</span>
-                  <input
-                    type="checkbox"
-                    checked={reminderForm.remind_one_day}
-                    onChange={(event) =>
-                      setReminderForm((current) => ({
-                        ...current,
-                        remind_one_day: event.target.checked,
-                      }))
-                    }
-                  />
-                </label>
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="remind_one_day"
+                      checked={reminderForm.remind_one_day}
+                      onChange={(event) =>
+                        setReminderForm((current) => ({
+                          ...current,
+                          remind_one_day: event.target.checked,
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    <label htmlFor="remind_one_day" className="text-sm text-slate-700">
+                      Nhắc trước 1 ngày
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="remind_two_hours"
+                      checked={reminderForm.remind_two_hours}
+                      onChange={(event) =>
+                        setReminderForm((current) => ({
+                          ...current,
+                          remind_two_hours: event.target.checked,
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    <label htmlFor="remind_two_hours" className="text-sm text-slate-700">
+                      Nhắc trước 2 giờ
+                    </label>
+                  </div>
+                </div>
 
-                <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-700">Nhắc trước 2 giờ</span>
-                  <input
-                    type="checkbox"
-                    checked={reminderForm.remind_two_hours}
-                    onChange={(event) =>
-                      setReminderForm((current) => ({
-                        ...current,
-                        remind_two_hours: event.target.checked,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={!selectedChild}
-                className="mt-6 w-full rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                Lưu cài đặt reminder
-              </button>
-            </form>
-
-            <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                Mức triển khai
-              </p>
-              <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                <li>Không đăng nhập vẫn tạo được nhiều hồ sơ bé.</li>
-                <li>Dữ liệu guest chỉ lưu trong local storage của trình duyệt này.</li>
-                <li>Calendar `.ics` là đường nhắc lịch miễn phí mặc định.</li>
-                <li>
-                  Nếu muốn đồng bộ lên database và dùng OTP, vào <a className="text-teal-700 underline" href="/login">/login</a>.
-                </li>
-              </ul>
+                <button
+                  type="submit"
+                  className="w-full rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800"
+                >
+                  Lưu cài đặt local
+                </button>
+              </form>
             </div>
           </aside>
         </section>
       </div>
 
       {toast ? (
-        <div className="fixed bottom-5 right-5 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-soft">
-          {toast}
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4">
+          <div className="rounded-2xl bg-slate-900 px-6 py-3 font-bold text-white shadow-2xl">
+            {toast}
+          </div>
         </div>
       ) : null}
     </div>

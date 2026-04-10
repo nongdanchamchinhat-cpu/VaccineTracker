@@ -2,24 +2,18 @@ import { NextResponse } from "next/server";
 
 import { jsonError, requireAuthenticatedUser } from "@/lib/api";
 
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
+export async function GET() {
   try {
     const { supabase, user } = await requireAuthenticatedUser();
     if (!user) return jsonError("Unauthorized", 401);
 
-    const { id } = await context.params;
     const { data, error } = await supabase
-      .from("child_vaccine_items")
+      .from("family_members")
       .select("*")
-      .eq("child_id", id)
-      .order("scheduled_date", { ascending: true })
-      .order("sort_order", { ascending: true });
+      .order("created_at", { ascending: true });
 
     if (error) return jsonError(error.message, 400);
-    return NextResponse.json({ items: data ?? [] });
+    return NextResponse.json({ members: data ?? [] });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Unexpected error", 500);
   }

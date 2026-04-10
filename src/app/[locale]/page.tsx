@@ -7,10 +7,10 @@ export const dynamic = "force-dynamic";
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ childId?: string }>;
+  searchParams: Promise<{ memberId?: string }>;
 }) {
   const params = await searchParams;
-  const bootstrap = await loadDashboardData(params.childId);
+  const bootstrap = await loadDashboardData(params.memberId);
 
   if (!bootstrap) {
     return <GuestDashboardApp />;

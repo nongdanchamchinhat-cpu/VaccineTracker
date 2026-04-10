@@ -16,11 +16,11 @@ function formatICSDate(dateTime: DateTime) {
 }
 
 export function generateCalendarICS({
-  childName,
+  memberName,
   timezone,
   items,
 }: {
-  childName: string;
+  memberName: string;
   timezone: string;
   items: ScheduleItem[];
 }) {
@@ -35,11 +35,11 @@ export function generateCalendarICS({
 
       return [
         "BEGIN:VEVENT",
-        `UID:${item.id}@kobe-vaccine-tracker`,
+        `UID:${item.id}@family-vaccine-tracker`,
         `DTSTAMP:${formatICSDate(DateTime.utc())}`,
         `DTSTART:${formatICSDate(start)}`,
         `DTEND:${formatICSDate(end)}`,
-        `SUMMARY:${escapeICS(`Tiêm chủng cho ${childName}: ${item.vaccine_name}`)}`,
+        `SUMMARY:${escapeICS(`Tiêm chủng cho ${memberName}: ${item.vaccine_name}`)}`,
         `DESCRIPTION:${escapeICS(
           `Mốc: ${item.milestone}\nBệnh phòng ngừa: ${item.disease}\nXuất xứ: ${item.origin}\nChi phí dự kiến: ${item.estimated_price ?? 0} VND\nLưu ý: Cần bác sĩ xác nhận trước khi tiêm.`,
         )}`,
@@ -47,12 +47,12 @@ export function generateCalendarICS({
         "BEGIN:VALARM",
         "TRIGGER:-P1D",
         "ACTION:DISPLAY",
-        `DESCRIPTION:${escapeICS(`Nhắc lịch tiêm cho ${childName} vào ngày mai`)}`,
+        `DESCRIPTION:${escapeICS(`Nhắc lịch tiêm cho ${memberName} vào ngày mai`)}`,
         "END:VALARM",
         "BEGIN:VALARM",
         "TRIGGER:-PT2H",
         "ACTION:DISPLAY",
-        `DESCRIPTION:${escapeICS(`Lịch tiêm cho ${childName} trong 2 giờ nữa`)}`,
+        `DESCRIPTION:${escapeICS(`Lịch tiêm cho ${memberName} trong 2 giờ nữa`)}`,
         "END:VALARM",
         "END:VEVENT",
       ].join("\n");
@@ -62,10 +62,10 @@ export function generateCalendarICS({
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//KobeTracker//MultiTenant//VI",
+    "PRODID:-//FamilyVaccineTracker//MultiTenant//VI",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    `X-WR-CALNAME:${escapeICS(`Lịch tiêm chủng của ${childName}`)}`,
+    `X-WR-CALNAME:${escapeICS(`Lịch tiêm chủng của ${memberName}`)}`,
     `X-WR-TIMEZONE:${timezone}`,
     events,
     "END:VCALENDAR",
