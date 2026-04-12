@@ -400,11 +400,15 @@ export function GuestDashboardApp() {
                 Guest mode
               </div>
               <h1 className="mt-6 text-3xl font-black leading-tight md:text-5xl">
-                Quản lý lịch tiêm cho cả gia đình, nhanh chóng và miễn phí.
+                <span className="md:hidden">Lịch tiêm gia đình</span>
+                <span className="hidden md:inline">Quản lý lịch tiêm cho cả gia đình, nhanh chóng và miễn phí.</span>
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                Dữ liệu được lưu trực tiếp trên trình duyệt của bạn. Phù hợp khi muốn quản lý ngay
-                lịch tiêm cho con cái, cha mẹ mà không cần tạo tài khoản.
+                <span className="md:hidden">Dữ liệu lưu tại trình duyệt, không cần tạo tài khoản.</span>
+                <span className="hidden md:inline">
+                  Dữ liệu được lưu trực tiếp trên trình duyệt của bạn. Phù hợp khi muốn quản lý ngay
+                  lịch tiêm cho con cái, cha mẹ mà không cần tạo tài khoản.
+                </span>
               </p>
             </div>
 
