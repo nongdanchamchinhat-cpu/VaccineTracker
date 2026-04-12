@@ -628,47 +628,51 @@ export function GuestDashboardApp() {
 
             {selectedMember ? (
               <>
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+                  {/* Tiến độ */}
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Tiến độ
                     </p>
                     <div className="mt-3 text-4xl font-black text-ink">{progress}%</div>
                     <p className="mt-2 text-sm text-slate-500">
-                      {completedItems.length}/{scheduleItems.length} mũi đã hoàn tất.
+                      {completedItems.length}/{scheduleItems.length} mũi
                     </p>
                   </div>
+                  {/* Còn tiêm */}
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                      Còn phải tiêm
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Còn tiêm
                     </p>
                     <div className="mt-3 text-4xl font-black text-amber-600">
                       {todoItems.length}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
-                      Các mũi đang ở trạng thái sắp tiêm.
+                      Cần hoàn thành.
                     </p>
                   </div>
+                  {/* Đã chi */}
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Đã chi
                     </p>
-                    <div className="mt-3 text-xl font-black text-teal-700 break-all leading-tight">
+                    <div className="mt-3 text-lg font-black text-teal-700 truncate" title={String(formatCurrency(spent))}>
                       {formatCurrency(spent)}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
-                      Tính thực tế nếu có.
+                      Thực tế nếu có.
                     </p>
                   </div>
+                  {/* Dự kiến */}
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-soft">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                      Tổng dự kiến
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Dự kiến
                     </p>
-                    <div className="mt-3 text-xl font-black text-ink break-all leading-tight">
+                    <div className="mt-3 text-lg font-black text-ink truncate" title={String(formatCurrency(projectedBudget))}>
                       {formatCurrency(projectedBudget)}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
-                      Theo lịch mẫu & tự tạo.
+                      Lịch mẫu &amp; tự tạo.
                     </p>
                   </div>
                 </div>
