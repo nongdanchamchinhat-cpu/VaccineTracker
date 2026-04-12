@@ -647,7 +647,7 @@ export function GuestDashboardApp() {
                     <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
                       Đã chi
                     </p>
-                    <div className="mt-3 text-3xl font-black text-teal-700">
+                    <div className="mt-3 text-xl font-black text-teal-700 break-all leading-tight">
                       {formatCurrency(spent)}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
@@ -658,7 +658,7 @@ export function GuestDashboardApp() {
                     <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
                       Tổng dự kiến
                     </p>
-                    <div className="mt-3 text-3xl font-black text-ink">
+                    <div className="mt-3 text-xl font-black text-ink break-all leading-tight">
                       {formatCurrency(projectedBudget)}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
