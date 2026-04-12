@@ -91,6 +91,7 @@ export function GuestDashboardApp() {
   const [customFormOpen, setCustomFormOpen] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(true);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [memberSettingsOpen, setMemberSettingsOpen] = useState(false);
   const [reminderForm, setReminderForm] = useState<ReminderPreferences>(
     getDefaultReminderPreferences(null, null),
   );
@@ -236,6 +237,46 @@ export function GuestDashboardApp() {
     notify("Đã tạo hồ sơ thành viên và lưu vào local storage.");
   }
 
+  // ── Chỉnh sửa hồ sơ (không chạm vào createMemberHandler) ─────────────────
+  function handleUpdateMember(id: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("edit_name") || "").trim();
+    const memberType = formData.get("edit_memberType") as MemberType;
+    const gender = String(formData.get("edit_gender") || "") || null;
+    if (!name) return;
+
+    setMembers((current) =>
+      current.map((m) =>
+        m.id === id
+          ? { ...m, name, member_type: memberType, gender, updated_at: new Date().toISOString() }
+          : m,
+      ),
+    );
+    setMemberSettingsOpen(false);
+    notify("Đã cập nhật hồ sơ thành viên.");
+  }
+
+  // ── Xóa hồ sơ (không chạm vào createMemberHandler) ───────────────────────
+  function handleDeleteMember(id: string) {
+    const member = members.find((m) => m.id === id);
+    if (!member) return;
+    if (!window.confirm(`Xóa hồ sơ "${member.name}" và toàn bộ lịch tiêm liên quan? Hành động này không thể hoàn tác.`)) return;
+
+    setMembers((current) => current.filter((m) => m.id !== id));
+    setAllScheduleItems((current) => current.filter((item) => item.member_id !== id));
+    setReminderPreferencesByMember((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    if (selectedMemberId === id) {
+      setSelectedMemberId(members.find((m) => m.id !== id)?.id ?? null);
+    }
+    setMemberSettingsOpen(false);
+    notify(`Đã xóa hồ sơ "${member.name}".`);
+  }
+
   function saveReminderPreferences(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedMember) return;
@@ -306,12 +347,12 @@ export function GuestDashboardApp() {
       current.map((entry) =>
         entry.id === item.id
           ? {
-              ...entry,
-              status: "completed",
-              actual_price: entry.actual_price ?? entry.estimated_price ?? null,
-              completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }
+            ...entry,
+            status: "completed",
+            actual_price: entry.actual_price ?? entry.estimated_price ?? null,
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
           : entry,
       ),
     );
@@ -323,22 +364,22 @@ export function GuestDashboardApp() {
       current.map((entry) =>
         entry.id === itemId
           ? {
-              ...entry,
-              status: nextStatus,
-              scheduled_date: String(formData.get("scheduled_date") || ""),
-              estimated_price: formData.get("estimated_price")
-                ? Number(formData.get("estimated_price"))
-                : null,
-              actual_price: formData.get("actual_price")
-                ? Number(formData.get("actual_price"))
-                : null,
-              vaccine_name: String(formData.get("vaccine_name") || ""),
-              disease: String(formData.get("disease") || ""),
-              origin: String(formData.get("origin") || ""),
-              notes: String(formData.get("notes") || "") || null,
-              completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
-              updated_at: new Date().toISOString(),
-            }
+            ...entry,
+            status: nextStatus,
+            scheduled_date: String(formData.get("scheduled_date") || ""),
+            estimated_price: formData.get("estimated_price")
+              ? Number(formData.get("estimated_price"))
+              : null,
+            actual_price: formData.get("actual_price")
+              ? Number(formData.get("actual_price"))
+              : null,
+            vaccine_name: String(formData.get("vaccine_name") || ""),
+            disease: String(formData.get("disease") || ""),
+            origin: String(formData.get("origin") || ""),
+            notes: String(formData.get("notes") || "") || null,
+            completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
+            updated_at: new Date().toISOString(),
+          }
           : entry,
       ),
     );
@@ -361,7 +402,7 @@ export function GuestDashboardApp() {
                 Quản lý lịch tiêm cho cả gia đình, nhanh chóng và miễn phí.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                Dữ liệu được lưu trực tiếp trên trình duyệt của bạn. Phù hợp khi muốn quản lý ngay 
+                Dữ liệu được lưu trực tiếp trên trình duyệt của bạn. Phù hợp khi muốn quản lý ngay
                 lịch tiêm cho con cái, cha mẹ mà không cần tạo tài khoản.
               </p>
             </div>
@@ -430,8 +471,96 @@ export function GuestDashboardApp() {
                   >
                     {addMemberOpen ? "Đóng form" : "Thêm thành viên"}
                   </button>
+                  {selectedMember && (
+                    <button
+                      title="Chỉnh sửa / xóa hồ sơ"
+                      onClick={() => {
+                        setMemberSettingsOpen((v) => !v);
+                        setAddMemberOpen(false);
+                      }}
+                      className={cn(
+                        "rounded-full border p-2 transition",
+                        memberSettingsOpen
+                          ? "border-teal-300 bg-teal-50 text-teal-700"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                      )}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {/* ── Panel chỉnh sửa / xóa hồ sơ ──────────────────────── */}
+              {memberSettingsOpen && selectedMember && (
+                <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-500">
+                    Chỉnh sửa hồ sơ: {selectedMember.name}
+                  </p>
+                  <form
+                    className="grid gap-3 md:grid-cols-2"
+                    onSubmit={(e) => handleUpdateMember(selectedMember.id, e)}
+                  >
+                    <div className="flex flex-col gap-1">
+                      <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Tên</label>
+                      <input
+                        required
+                        name="edit_name"
+                        defaultValue={selectedMember.name}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-teal-500"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Loại thành viên</label>
+                      <select
+                        name="edit_memberType"
+                        defaultValue={selectedMember.member_type}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-teal-500"
+                      >
+                        {Object.entries(MEMBER_TYPE_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {MEMBER_TYPE_ICONS[value as MemberType]} {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Giới tính</label>
+                      <select
+                        name="edit_gender"
+                        defaultValue={selectedMember.gender || ""}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-teal-500"
+                      >
+                        <option value="">Chưa xác định</option>
+                        <option value="male">Nam</option>
+                        <option value="female">Nữ</option>
+                        <option value="other">Khác</option>
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="submit"
+                        className="w-full rounded-2xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800"
+                      >
+                        Lưu thay đổi
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4">
+                    <div>
+                      <p className="text-xs font-bold text-rose-900">Xóa hồ sơ này</p>
+                      <p className="text-[11px] text-rose-600">Xóa vĩnh viễn khỏi trình duyệt, không thể hoàn tác.</p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteMember(selectedMember.id)}
+                      className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700"
+                    >
+                      Xóa hồ sơ
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {addMemberOpen ? (
                 <form className="mt-6 grid gap-3 md:grid-cols-2" onSubmit={createMemberHandler}>
