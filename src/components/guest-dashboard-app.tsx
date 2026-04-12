@@ -29,7 +29,7 @@ import {
 import { DEFAULT_APPOINTMENT_TIME, DEFAULT_TIMEZONE } from "@/lib/constants";
 import { normalizeReminderOffsets } from "@/lib/reminders";
 
-type FilterTab = "all" | "todo" | "done";
+type FilterTab = "all" | "overdue" | "todo" | "done";
 
 const MEMBER_TYPE_LABELS: Record<MemberType, string> = {
   infant: "Sơ sinh",
@@ -158,6 +158,7 @@ export function GuestDashboardApp() {
         item.milestone.toLowerCase().includes(search.toLowerCase());
 
       if (!matchesSearch) return false;
+      if (tab === "overdue") return item.status === "overdue";
       if (tab === "todo") return item.status === "planned" || item.status === "overdue";
       if (tab === "done") return item.status === "completed";
       return true;
@@ -165,6 +166,7 @@ export function GuestDashboardApp() {
   }, [scheduleItems, search, tab]);
 
   const completedItems = scheduleItems.filter((item) => item.status === "completed");
+  const overdueItems = scheduleItems.filter((item) => item.status === "overdue");
   const todoItems = scheduleItems.filter((item) => item.status === "planned" || item.status === "overdue");
   const spent = completedItems.reduce(
     (acc, item) => acc + (item.actual_price ?? item.estimated_price ?? 0),
@@ -704,21 +706,29 @@ export function GuestDashboardApp() {
                       placeholder="Tìm theo tên mũi, bệnh hoặc mốc"
                       className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                     />
-                    <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
-                      {(["all", "todo", "done"] as FilterTab[]).map((filter) => (
+                    <div className="flex flex-wrap gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                      {(["all", "overdue", "todo", "done"] as FilterTab[]).map((filter) => (
                         <button
                           key={filter}
                           onClick={() => setTab(filter)}
                           className={cn(
-                            "rounded-xl px-4 py-2 text-sm font-semibold transition",
-                            tab === filter ? "bg-white text-teal-700 shadow" : "text-slate-600",
+                            "rounded-xl px-3 py-2 text-sm font-semibold transition",
+                            filter === "overdue"
+                              ? tab === filter
+                                ? "bg-rose-600 text-white shadow"
+                                : "text-rose-600 hover:bg-rose-50"
+                              : tab === filter
+                                ? "bg-white text-teal-700 shadow"
+                                : "text-slate-600",
                           )}
                         >
                           {filter === "all"
                             ? `Tất cả (${scheduleItems.length})`
-                            : filter === "todo"
-                              ? `Cần tiêm (${todoItems.length})`
-                              : `Đã tiêm (${completedItems.length})`}
+                            : filter === "overdue"
+                              ? `Quá hạn${overdueItems.length > 0 ? ` (${overdueItems.length})` : ""}`
+                              : filter === "todo"
+                                ? `Cần tiêm (${todoItems.length})`
+                                : `Đã tiêm (${completedItems.length})`}
                         </button>
                       ))}
                     </div>
