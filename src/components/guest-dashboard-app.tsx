@@ -914,7 +914,29 @@ export function GuestDashboardApp() {
                                   >
                                     Đã tiêm
                                   </button>
-                                ) : null}
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setAllScheduleItems((current) =>
+                                        current.map((entry) =>
+                                          entry.id === item.id
+                                            ? {
+                                                ...entry,
+                                                status: "planned",
+                                                actual_price: null,
+                                                completed_at: null,
+                                                updated_at: new Date().toISOString(),
+                                              }
+                                            : entry,
+                                        ),
+                                      );
+                                      notify(`Đã hoàn tác "${item.vaccine_name}" về trạng thái sắp tiêm.`);
+                                    }}
+                                    className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
+                                  >
+                                    ↩ Hoàn tác
+                                  </button>
+                                )}
                                 <button
                                   onClick={() =>
                                     setEditingItemId((current) =>
