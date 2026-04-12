@@ -582,7 +582,10 @@ export function GuestDashboardApp() {
                   />
                   <input
                     required
-                    type="date"
+                    type={memberForm.birthDate ? "date" : "text"}
+                    onFocus={(e) => (e.currentTarget.type = "date")}
+                    onBlur={(e) => !memberForm.birthDate && (e.currentTarget.type = "text")}
+                    placeholder="Ngày sinh (dd/mm/yyyy)"
                     value={memberForm.birthDate}
                     onChange={(event) =>
                       setMemberForm((current) => ({
