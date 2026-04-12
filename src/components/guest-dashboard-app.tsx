@@ -158,14 +158,14 @@ export function GuestDashboardApp() {
         item.milestone.toLowerCase().includes(search.toLowerCase());
 
       if (!matchesSearch) return false;
-      if (tab === "todo") return item.status === "planned";
+      if (tab === "todo") return item.status === "planned" || item.status === "overdue";
       if (tab === "done") return item.status === "completed";
       return true;
     });
   }, [scheduleItems, search, tab]);
 
   const completedItems = scheduleItems.filter((item) => item.status === "completed");
-  const plannedItems = scheduleItems.filter((item) => item.status === "planned");
+  const todoItems = scheduleItems.filter((item) => item.status === "planned" || item.status === "overdue");
   const spent = completedItems.reduce(
     (acc, item) => acc + (item.actual_price ?? item.estimated_price ?? 0),
     0,
@@ -175,7 +175,7 @@ export function GuestDashboardApp() {
     0,
   );
   const progress = computeProgress(scheduleItems.length, completedItems.length);
-  const topCalendarCandidates = plannedItems.slice(0, 3);
+  const topCalendarCandidates = todoItems.slice(0, 3);
 
   function notify(message: string) {
     setToast(message);
@@ -641,7 +641,7 @@ export function GuestDashboardApp() {
                       Còn phải tiêm
                     </p>
                     <div className="mt-3 text-4xl font-black text-amber-600">
-                      {plannedItems.length}
+                      {todoItems.length}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
                       Các mũi đang ở trạng thái sắp tiêm.
@@ -717,7 +717,7 @@ export function GuestDashboardApp() {
                           {filter === "all"
                             ? `Tất cả (${scheduleItems.length})`
                             : filter === "todo"
-                              ? `Cần tiêm (${plannedItems.length})`
+                              ? `Cần tiêm (${todoItems.length})`
                               : `Đã tiêm (${completedItems.length})`}
                         </button>
                       ))}
