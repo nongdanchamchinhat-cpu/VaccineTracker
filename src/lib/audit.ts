@@ -6,7 +6,7 @@ export async function logAuditEvent(
   action: string,
   entityType: string,
   entityId: string | null = null,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, unknown> = {}
 ) {
   try {
     const { error } = await supabase.from("audit_logs").insert({

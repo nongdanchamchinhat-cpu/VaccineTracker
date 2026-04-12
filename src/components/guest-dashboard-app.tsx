@@ -1,6 +1,7 @@
 "use client";
 
 import { DateTime } from "luxon";
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
@@ -415,12 +416,12 @@ export function GuestDashboardApp() {
               <p className="mt-2 text-sm text-slate-300">
                 Dữ liệu chỉ lưu trên trình duyệt và thiết bị này.
               </p>
-              <a
+              <Link
                 href="/login"
                 className="mt-6 inline-flex rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
                 Đăng nhập để đồng bộ server
-              </a>
+              </Link>
             </div>
           </div>
         </header>
