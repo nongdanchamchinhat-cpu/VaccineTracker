@@ -634,7 +634,7 @@ export function GuestDashboardApp() {
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Tiến độ
                     </p>
-                    <div className="mt-3 text-4xl font-black text-ink">{progress}%</div>
+                    <div className="mt-3 text-2xl font-black text-ink">{progress}%</div>
                     <p className="mt-2 text-sm text-slate-500">
                       {completedItems.length}/{scheduleItems.length} mũi
                     </p>
@@ -644,7 +644,7 @@ export function GuestDashboardApp() {
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Còn tiêm
                     </p>
-                    <div className="mt-3 text-4xl font-black text-amber-600">
+                    <div className="mt-3 text-2xl font-black text-amber-600">
                       {todoItems.length}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
@@ -656,7 +656,7 @@ export function GuestDashboardApp() {
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Đã chi
                     </p>
-                    <div className="mt-3 text-lg font-black text-teal-700 truncate" title={String(formatCurrency(spent))}>
+                    <div className="mt-3 text-2xl font-black text-teal-700 truncate" title={String(formatCurrency(spent))}>
                       {formatCurrency(spent)}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
@@ -668,7 +668,7 @@ export function GuestDashboardApp() {
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Dự kiến
                     </p>
-                    <div className="mt-3 text-lg font-black text-ink truncate" title={String(formatCurrency(projectedBudget))}>
+                    <div className="mt-3 text-2xl font-black text-ink truncate" title={String(formatCurrency(projectedBudget))}>
                       {formatCurrency(projectedBudget)}
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
