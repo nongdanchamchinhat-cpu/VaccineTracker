@@ -401,32 +401,32 @@ export function GuestDashboardApp() {
               <div className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-teal-100">
                 Guest mode
               </div>
-              <h1 className="mt-6 text-3xl font-black leading-tight md:text-5xl">
+              <h1 className="mt-4 text-3xl font-black leading-tight md:mt-6 md:text-5xl">
                 <span className="md:hidden">Lịch tiêm gia đình</span>
                 <span className="hidden md:inline">Quản lý lịch tiêm cho cả gia đình, nhanh chóng và miễn phí.</span>
               </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                <span className="md:hidden">Dữ liệu lưu tại trình duyệt, không cần tạo tài khoản.</span>
-                <span className="hidden md:inline">
-                  Dữ liệu được lưu trực tiếp trên trình duyệt của bạn. Phù hợp khi muốn quản lý ngay
-                  lịch tiêm cho con cái, cha mẹ mà không cần tạo tài khoản.
-                </span>
+              <p className="mt-4 hidden max-w-2xl text-sm leading-7 text-slate-300 md:block md:text-base">
+                Dữ liệu được lưu trực tiếp trên trình duyệt của bạn. Phù hợp khi muốn quản lý ngay
+                lịch tiêm cho con cái, cha mẹ mà không cần tạo tài khoản.
               </p>
             </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-300">
-                Chế độ hiện tại
-              </p>
-              <div className="mt-3 text-lg font-bold">Khách / Local Storage</div>
-              <p className="mt-2 text-sm text-slate-300">
-                Dữ liệu chỉ lưu trên trình duyệt và thiết bị này.
-              </p>
+            <div className="flex items-center justify-between md:block md:rounded-[28px] md:border md:border-white/10 md:bg-white/5 md:p-5">
+              <div className="hidden md:block">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-300">
+                  Chế độ hiện tại
+                </p>
+                <div className="mt-3 text-lg font-bold">Khách / Local Storage</div>
+                <p className="mt-2 text-sm text-slate-300">
+                  Dữ liệu chỉ lưu trên trình duyệt và thiết bị này.
+                </p>
+              </div>
               <Link
                 href="/login"
-                className="mt-6 inline-flex rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                className="inline-flex rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 md:mt-6"
               >
-                Đăng nhập để đồng bộ server
+                <span className="md:hidden">Đăng nhập</span>
+                <span className="hidden md:inline">Đăng nhập để đồng bộ server</span>
               </Link>
             </div>
           </div>
