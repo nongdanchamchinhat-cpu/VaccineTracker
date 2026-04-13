@@ -580,21 +580,25 @@ export function GuestDashboardApp() {
                     placeholder="Tên thành viên"
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                   />
-                  <input
-                    required
-                    type={memberForm.birthDate ? "date" : "text"}
-                    onFocus={(e) => (e.currentTarget.type = "date")}
-                    onBlur={(e) => !memberForm.birthDate && (e.currentTarget.type = "text")}
-                    placeholder="Ngày sinh (dd/mm/yyyy)"
-                    value={memberForm.birthDate}
-                    onChange={(event) =>
-                      setMemberForm((current) => ({
-                        ...current,
-                        birthDate: event.target.value,
-                      }))
-                    }
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
-                  />
+                  <div className="relative">
+                    <input
+                      required
+                      type="date"
+                      value={memberForm.birthDate}
+                      onChange={(event) =>
+                        setMemberForm((current) => ({
+                          ...current,
+                          birthDate: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
+                    />
+                    {!memberForm.birthDate && (
+                      <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                        Ngày sinh
+                      </div>
+                    )}
+                  </div>
                   <select
                     required
                     value={memberForm.memberType}
