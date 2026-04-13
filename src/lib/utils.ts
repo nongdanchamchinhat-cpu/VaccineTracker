@@ -14,6 +14,34 @@ export function formatCurrency(value: number | null | undefined) {
   }).format(value);
 }
 
+export function formatCompactCurrency(value: number | null | undefined) {
+  if (value == null) return "Chưa có";
+
+  const absValue = Math.abs(value);
+  if (absValue >= 1_000_000_000) {
+    return `${new Intl.NumberFormat("vi-VN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    }).format(value / 1_000_000_000)} tỷ`;
+  }
+
+  if (absValue >= 1_000_000) {
+    return `${new Intl.NumberFormat("vi-VN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    }).format(value / 1_000_000)} triệu`;
+  }
+
+  if (absValue >= 1_000) {
+    return `${new Intl.NumberFormat("vi-VN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value / 1_000)} nghìn`;
+  }
+
+  return formatCurrency(value);
+}
+
 export function formatDateVN(dateISO: string) {
   return DateTime.fromISO(dateISO).setLocale("vi").toFormat("dd/MM/yyyy");
 }

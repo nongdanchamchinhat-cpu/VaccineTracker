@@ -10,7 +10,13 @@ export default async function HomePage({
   searchParams: Promise<{ memberId?: string }>;
 }) {
   const params = await searchParams;
-  const bootstrap = await loadDashboardData(params.memberId);
+  let bootstrap = null;
+
+  try {
+    bootstrap = await loadDashboardData(params.memberId);
+  } catch (error) {
+    console.error("Falling back to guest dashboard:", error);
+  }
 
   if (!bootstrap) {
     return <GuestDashboardApp />;

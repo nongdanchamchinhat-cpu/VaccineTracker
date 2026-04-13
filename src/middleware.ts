@@ -6,18 +6,19 @@ import { updateSession } from "@/lib/supabase/middleware";
 const intlMiddleware = createMiddleware(routing);
 
 export async function middleware(request: NextRequest) {
-  // Update auth session via Supabase
-  const sessionResponse = await updateSession(request);
-  
   // Use next-intl middleware for internationalization routing
   const response = intlMiddleware(request);
 
-  // Copy cookies from the Supabase session response to the final next-intl response
-  // This is required so Supabase's refreshed auth tokens are correctly persisted.
-  const cookiesToSet = sessionResponse.cookies.getAll();
-  cookiesToSet.forEach(({ name, value, ...options }) => {
-    response.cookies.set(name, value, options);
-  });
+  try {
+    // Update auth session via Supabase when public env vars are available.
+    const sessionResponse = await updateSession(request);
+    const cookiesToSet = sessionResponse.cookies.getAll();
+    cookiesToSet.forEach(({ name, value, ...options }) => {
+      response.cookies.set(name, value, options);
+    });
+  } catch (error) {
+    console.warn("Skipping Supabase session update in middleware:", error);
+  }
 
   return response;
 }
