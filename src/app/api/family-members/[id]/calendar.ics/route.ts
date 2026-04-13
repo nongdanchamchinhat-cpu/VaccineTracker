@@ -27,10 +27,15 @@ export async function GET(
     if (memberError || !member) return jsonError("Không tìm thấy hồ sơ thành viên.", 404);
     if (itemsError) return jsonError(itemsError.message, 400);
 
+    // Only export items that are still pending (planned/overdue), not completed/skipped
+    const pendingItems = ((items ?? []) as ScheduleItem[]).filter(
+      (item) => item.status === "planned" || item.status === "overdue",
+    );
+
     const ics = generateCalendarICS({
       memberName: (member as FamilyMember).name,
       timezone: (member as FamilyMember).timezone,
-      items: (items ?? []) as ScheduleItem[],
+      items: pendingItems,
     });
 
     return new NextResponse(ics, {

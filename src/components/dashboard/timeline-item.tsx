@@ -3,7 +3,8 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FamilyMember, ScheduleItem, ScheduleItemStatus } from "@/lib/types";
-import { cn, formatDateLabel, formatCurrency, buildGoogleCalendarUrl } from "@/lib/utils";
+import { cn, formatDateLabel, formatCurrency } from "@/lib/utils";
+import { generateSingleEventICS } from "@/lib/ics";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 interface TimelineItemProps {
@@ -199,18 +200,27 @@ export function TimelineItem({
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href={buildGoogleCalendarUrl({
-                memberName: selectedMember.name,
-                timezone: selectedMember.timezone,
-                item,
-              })}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              onClick={() => {
+                const icsContent = generateSingleEventICS({
+                  memberName: selectedMember.name,
+                  timezone: selectedMember.timezone,
+                  item,
+                });
+                const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = `${item.vaccine_name.replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, "-")}.ics`;
+                document.body.appendChild(anchor);
+                anchor.click();
+                document.body.removeChild(anchor);
+                URL.revokeObjectURL(url);
+              }}
               className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 transition hover:border-teal-300 hover:bg-teal-100"
             >
-              Google Calendar
-            </a>
+              Tải .ics
+            </button>
             {item.status !== "completed" ? (
               <button
                 onClick={quickComplete}

@@ -11,7 +11,7 @@ import {
   loadGuestStorage,
   saveGuestStorage,
 } from "@/lib/guest-local";
-import { generateCalendarICS } from "@/lib/ics";
+import { generateCalendarICS, generateSingleEventICS } from "@/lib/ics";
 import {
   FamilyMember,
   ReminderPreferences,
@@ -20,7 +20,6 @@ import {
   MemberType,
 } from "@/lib/types";
 import {
-  buildGoogleCalendarUrl,
   cn,
   computeProgress,
   formatCompactCurrency,
@@ -188,10 +187,15 @@ export function GuestDashboardApp() {
   function downloadCalendar() {
     if (!selectedMember) return;
 
+    // Only export items that are still pending (planned/overdue)
+    const pendingItems = scheduleItems.filter(
+      (item) => item.status === "planned" || item.status === "overdue",
+    );
+
     const ics = generateCalendarICS({
       memberName: selectedMember.name,
       timezone: selectedMember.timezone,
-      items: scheduleItems,
+      items: pendingItems,
     });
 
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
@@ -583,25 +587,18 @@ export function GuestDashboardApp() {
                     placeholder="Tên thành viên"
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
                   />
-                  <div className="relative">
-                    <input
-                      required
-                      type="date"
-                      value={memberForm.birthDate}
-                      onChange={(event) =>
-                        setMemberForm((current) => ({
-                          ...current,
-                          birthDate: event.target.value,
-                        }))
-                      }
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
-                    />
-                    {!memberForm.birthDate && (
-                      <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                        Ngày sinh
-                      </div>
-                    )}
-                  </div>
+                  <input
+                    required
+                    type="date"
+                    value={memberForm.birthDate}
+                    onChange={(event) =>
+                      setMemberForm((current) => ({
+                        ...current,
+                        birthDate: event.target.value,
+                      }))
+                    }
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:bg-white"
+                  />
                   <select
                     required
                     value={memberForm.memberType}
@@ -919,18 +916,27 @@ export function GuestDashboardApp() {
                               </div>
 
                               <div className="mt-4 flex flex-wrap gap-2">
-                                <a
-                                  href={buildGoogleCalendarUrl({
-                                    memberName: selectedMember.name,
-                                    timezone: selectedMember.timezone,
-                                    item,
-                                  })}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                <button
+                                  onClick={() => {
+                                    const icsContent = generateSingleEventICS({
+                                      memberName: selectedMember.name,
+                                      timezone: selectedMember.timezone,
+                                      item,
+                                    });
+                                    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+                                    const url = URL.createObjectURL(blob);
+                                    const anchor = document.createElement("a");
+                                    anchor.href = url;
+                                    anchor.download = `${item.vaccine_name.replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, "-")}.ics`;
+                                    document.body.appendChild(anchor);
+                                    anchor.click();
+                                    document.body.removeChild(anchor);
+                                    URL.revokeObjectURL(url);
+                                  }}
                                   className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 transition hover:border-teal-300 hover:bg-teal-100"
                                 >
-                                  Google Calendar
-                                </a>
+                                  Tải .ics
+                                </button>
                                 {item.status !== "completed" ? (
                                   <button
                                     onClick={() => quickComplete(item)}
